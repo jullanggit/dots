@@ -1,6 +1,8 @@
+#![feature(let_chains)]
+
 use std::{
     env,
-    fs::{create_dir_all, remove_file, symlink_metadata},
+    fs::{self, create_dir_all, remove_file, symlink_metadata},
     io::{stdin, stdout, ErrorKind, Write},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
@@ -79,13 +81,16 @@ fn add(path: &Path, default_subdir: &str) {
 
     // Check if the path already exists
     while let Ok(metadata) = symlink_metadata(system_path) {
-        // Check if it is a symlink
-        if metadata.is_symlink() {
+        // Check if it is a symlink and already points to the correct location
+        if let Ok(destination) = fs::read_link(system_path)
+            && destination == config_path
+        {
             return;
         }
+
         // Ask for retry, if not, abort
         if bool_question(&format!(
-            "The path {} already exists and isn't a symlink, retry?",
+            "The path {} already exists, retry?",
             system_path.display()
         )) {
             continue;
