@@ -160,16 +160,23 @@ fn system_path(path: &Path) -> &Path {
     }
 }
 
-#[expect(clippy::let_underscore_must_use)]
+/// Asks the user the given question and returns the users answer.
+/// Returns false if getting the answer failed
 fn bool_question(question: &str) -> bool {
     print!("{question} ");
-    let _ = stdout().flush();
 
-    let mut buffer = String::new();
+    if stdout().flush().is_err() {
+        return false;
+    }
+
+    let mut buffer = String::with_capacity(3); // The longest accepted answer is 3 characters long
 
     loop {
         buffer.clear();
-        let _ = stdin().read_line(&mut buffer);
+
+        if stdin().read_line(&mut buffer).is_err() {
+            return false;
+        }
 
         match buffer.trim() {
             "y" | "Y" | "yes" | "Yes" => return true,
