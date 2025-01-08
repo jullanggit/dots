@@ -1,12 +1,12 @@
 #![feature(let_chains)]
 
 use std::{
-    env,
+    env::{self, current_exe},
     fs::{self, create_dir_all, remove_file, symlink_metadata},
     io::{stdin, stdout, ErrorKind, Write},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::exit,
+    process::{exit, Command},
 };
 
 use clap::{Parser, Subcommand};
@@ -110,7 +110,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
     if let Err(e) = symlink(config_path, system_path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
-                retry_with_root("Creating symlink");
+                rerun_with_root("Creating symlink");
             }
             ErrorKind::NotFound => {
                 if let Err(e) =
@@ -118,7 +118,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
                 {
                     match e.kind() {
                         ErrorKind::PermissionDenied => {
-                            retry_with_root("Creating parent directories");
+                            rerun_with_root("Creating parent directories");
                         }
                         other => error_with_message(&format!(
                             "Error creating parent directory: {other:?}"
@@ -135,10 +135,37 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
     };
 }
 
-// Inform the user and retry with root privileges
-fn retry_with_root(failed_action: &str) {
+/// Inform the user of the `failed_action` and rerun with root privileges
+fn rerun_with_root(failed_action: &str) -> ! {
     println!("{failed_action} requires root privileges",);
-    sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
+
+    // Collect args
+    let mut args: Vec<_> = env::args().collect();
+
+    // Overwrite the exe path with the absolute path if possible
+    if let Some(absolute_path) = current_exe()
+        .ok()
+        .and_then(|path| path.to_str().map(|path| path.to_owned()))
+    {
+        args[0] = absolute_path;
+    }
+
+    let home = env::var("HOME").expect("HOME env variable not set");
+
+    let status = Command::new("/usr/bin/sudo")
+        // Preserve $HOME
+        .arg(format!("HOME={home}"))
+        .args(args)
+        .spawn()
+        .expect("Failed to spawn child process")
+        .wait()
+        .expect("Failed to wait on child process");
+
+    if !status.success() {
+        exit(status.code().unwrap_or(1));
+    } else {
+        exit(0);
+    }
 }
 
 #[expect(clippy::wildcard_enum_match_arm)]
@@ -148,7 +175,7 @@ fn remove(path: &Path) {
         match e.kind() {
             // Inform the user and retry with root privileges
             ErrorKind::PermissionDenied => {
-                retry_with_root("Deleting symlink");
+                rerun_with_root("Deleting symlink");
             }
             other => error_with_message(&format!("Error deleting symlink: {other:?}")),
         }
