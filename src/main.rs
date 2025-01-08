@@ -104,7 +104,7 @@ fn add(path: &Path, default_subdir: &str) {
     create_symlink(&config_path, system_path);
 }
 
-/// Creates a symlink from 'config_path' to 'system_path'
+/// Creates a symlink from `config_path` to `system_path`
 fn create_symlink(config_path: &Path, system_path: &Path) {
     // Try creating the symlink
     if let Err(e) = symlink(config_path, system_path) {
