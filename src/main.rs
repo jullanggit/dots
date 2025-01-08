@@ -4,7 +4,7 @@ use std::{
     io::{stdin, stdout, ErrorKind, Write},
     os::unix::fs::symlink,
     path::{Path, PathBuf},
-    process::{self, exit},
+    process::exit,
 };
 
 use clap::{Parser, Subcommand};
@@ -87,7 +87,7 @@ fn add(path: &Path, default_subdir: &str) {
         )) {
             continue;
         }
-        process::exit(1)
+        exit(1)
     }
     println!("Symlinking {}", link.display());
     create_symlink(&origin, &link);
@@ -99,7 +99,7 @@ fn create_symlink(origin: &Path, link: &Path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
                 println!("Insufficient permissions to create the symlink");
-                process::exit(1)
+                exit(1) // Exit, so that it can be retried with adequate permissions
             }
             ErrorKind::NotFound => {
                 if bool_question(&format!(
@@ -112,7 +112,7 @@ fn create_symlink(origin: &Path, link: &Path) {
                         match e.kind() {
                             ErrorKind::PermissionDenied => {
                                 println!("Insufficient permissions to create parent directories");
-                                process::exit(1)
+                                exit(1)
                             }
                             other => println!("Error creating parent directory: {other:?}"),
                         }
@@ -120,7 +120,7 @@ fn create_symlink(origin: &Path, link: &Path) {
                         create_symlink(origin, link);
                     }
                 } else {
-                    process::exit(1)
+                    exit(1)
                 }
             }
             other => {
@@ -137,7 +137,7 @@ fn remove(path: &Path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
                 println!("Insufficient permissions to delete symlink");
-                process::exit(1)
+                exit(1)
             }
             other => println!("Error deleting symlink: {other:?}"),
         }
