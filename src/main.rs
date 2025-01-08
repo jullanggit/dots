@@ -73,12 +73,13 @@ fn config_path(mut path: &Path, default_subdir: &str) -> PathBuf {
     config_path
 }
 
+/// Symlink a the given path to its location in the actual system
 fn add(path: &Path, default_subdir: &str) {
-    let origin = get_origin(path, default_subdir);
-    let link = trim_files_subdir(path);
+    let config_path = config_path(path, default_subdir);
+    let system_path = system_path(path);
 
     // Check if the path already exists
-    while let Ok(metadata) = symlink_metadata(&link) {
+    while let Ok(metadata) = symlink_metadata(system_path) {
         // Check if it is a symlink
         if metadata.is_symlink() {
             return;
@@ -86,14 +87,14 @@ fn add(path: &Path, default_subdir: &str) {
         // Ask for retry, if not, abort
         if bool_question(&format!(
             "The path {} already exists and isn't a symlink, retry?",
-            link.display()
+            system_path.display()
         )) {
             continue;
         }
         exit(1)
     }
-    println!("Symlinking {}", link.display());
-    create_symlink(&origin, &link);
+    println!("Symlinking {}", system_path.display());
+    create_symlink(&config_path, system_path);
 }
 
 #[expect(clippy::wildcard_enum_match_arm)]
