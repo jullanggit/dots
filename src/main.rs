@@ -50,8 +50,7 @@ fn main() {
 /// Converts the path that should be symlinked to the path in the files/ directory
 fn config_path(mut path: &Path, default_subdir: &str) -> PathBuf {
     if Path::new(default_subdir).is_absolute() {
-        eprintln!("Default subdir is not allowed to be absolute");
-        exit(1);
+        error_with_message("Default subdir is not allowed to be absolute");
     }
 
     // Get the users home directory
@@ -90,8 +89,9 @@ fn add(path: &Path, default_subdir: &str) {
             system_path.display()
         )) {
             continue;
+        } else {
+            exit(1)
         }
-        exit(1)
     }
     println!("Symlinking {}", system_path.display());
     create_symlink(&config_path, system_path);
@@ -99,11 +99,11 @@ fn add(path: &Path, default_subdir: &str) {
 
 #[expect(clippy::wildcard_enum_match_arm)]
 fn create_symlink(origin: &Path, link: &Path) {
+    // Try creating the symlink
     if let Err(e) = symlink(origin, link) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
-                println!("Insufficient permissions to create the symlink");
-                exit(1) // Exit, so that it can be retried with adequate permissions
+                error_with_message("Insufficient permissions to create the symlink");
             }
             ErrorKind::NotFound => {
                 if bool_question(&format!(
@@ -115,14 +115,18 @@ fn create_symlink(origin: &Path, link: &Path) {
                     {
                         match e.kind() {
                             ErrorKind::PermissionDenied => {
-                                println!("Insufficient permissions to create parent directories");
-                                exit(1)
+                                error_with_message(
+                                    "Insufficient permissions to create parent directories",
+                                );
                             }
-                            other => println!("Error creating parent directory: {other:?}"),
+                            other => error_with_message(&format!(
+                                "Error creating parent directory: {other:?}"
+                            )),
                         }
                     } else {
                         create_symlink(origin, link);
                     }
+                // Parent paths shouldnt be created
                 } else {
                     exit(1)
                 }
@@ -140,10 +144,9 @@ fn remove(path: &Path) {
     if let Err(e) = remove_file(path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
-                println!("Insufficient permissions to delete symlink");
-                exit(1)
+                error_with_message("Insufficient permissions to delete symlink");
             }
-            other => println!("Error deleting symlink: {other:?}"),
+            other => error_with_message(&format!("Error deleting symlink: {other:?}")),
         }
     }
 }
@@ -188,4 +191,10 @@ fn bool_question(question: &str) -> bool {
             _other => continue,
         }
     }
+}
+
+// Not sure if theres a builtin for this
+fn error_with_message(message: &str) -> ! {
+    eprintln!("{message}");
+    exit(1)
 }
