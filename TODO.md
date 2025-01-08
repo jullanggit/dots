@@ -1,3 +1,2 @@
 - Add import command
 - Allow using {hostname}
-- Add option to just overwrite the file

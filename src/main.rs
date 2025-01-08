@@ -79,25 +79,27 @@ fn add(path: &Path, default_subdir: &str) {
     let config_path = config_path(path, default_subdir);
     let system_path = system_path(path);
 
-    // Check if the path already exists
-    while let Ok(metadata) = symlink_metadata(system_path) {
-        // Check if it is a symlink and already points to the correct location
+    // If the path already exists
+    if symlink_metadata(system_path).is_ok() {
+        // Check if it is a symlink that points to the correct location
         if let Ok(destination) = fs::read_link(system_path)
             && destination == config_path
         {
             return;
         }
 
-        // Ask for retry, if not, abort
-        if bool_question(&format!(
-            "The path {} already exists, retry?",
+        // -> It isnt
+        // Ask if the file should be overwritten
+        if !bool_question(&format!(
+            "The path {} already exists, overwrite?",
             system_path.display()
-        )) {
-            continue;
-        } else {
+        )) || !bool_question("Are you sure?")
+        {
             exit(1)
         }
     }
+
+    // At this point the path either doesn't exist yet, or the user has decided to overwrite it
     println!("Symlinking {}", system_path.display());
     create_symlink(&config_path, system_path);
 }
