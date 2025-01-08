@@ -114,10 +114,11 @@ fn create_symlink(origin: &Path, link: &Path) {
                         create_dir_all(link.parent().expect("Path shouldnt be just root or empty"))
                     {
                         match e.kind() {
+                            // Inform the user and retry with root privileges
                             ErrorKind::PermissionDenied => {
-                                error_with_message(
-                                    "Insufficient permissions to create parent directories",
-                                );
+                                println!("Creating parent directories requires root privileges",);
+                                sudo::with_env(&["HOME"])
+                                    .expect("Failed to acquire root privileges");
                             }
                             other => error_with_message(&format!(
                                 "Error creating parent directory: {other:?}"
@@ -143,8 +144,10 @@ fn remove(path: &Path) {
     let path = system_path(path);
     if let Err(e) = remove_file(path) {
         match e.kind() {
+            // Inform the user and retry with root privileges
             ErrorKind::PermissionDenied => {
-                error_with_message("Insufficient permissions to delete symlink");
+                println!("Deleting symlink requires root privileges",);
+                sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
             }
             other => error_with_message(&format!("Error deleting symlink: {other:?}")),
         }
