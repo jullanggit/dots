@@ -1,3 +1,5 @@
 - Use the sudo crate for rerunning as root
 - Add import command
 - Allow using {hostname}
+- If the file to symlink to is already a symlink, also check where it is pointing to
+- Add option to just overwrite the file
