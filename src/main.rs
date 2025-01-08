@@ -104,39 +104,30 @@ fn add(path: &Path, default_subdir: &str) {
     create_symlink(&config_path, system_path);
 }
 
-#[expect(clippy::wildcard_enum_match_arm)]
-fn create_symlink(origin: &Path, link: &Path) {
+/// Creates a symlink from 'config_path' to 'system_path'
+fn create_symlink(config_path: &Path, system_path: &Path) {
     // Try creating the symlink
-    if let Err(e) = symlink(origin, link) {
+    if let Err(e) = symlink(config_path, system_path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
                 error_with_message("Insufficient permissions to create the symlink");
             }
             ErrorKind::NotFound => {
-                if bool_question(&format!(
-                    "Could not find the path {}, should the parent paths be created?",
-                    link.display()
-                )) {
-                    if let Err(e) =
-                        create_dir_all(link.parent().expect("Path shouldnt be just root or empty"))
-                    {
-                        match e.kind() {
-                            // Inform the user and retry with root privileges
-                            ErrorKind::PermissionDenied => {
-                                println!("Creating parent directories requires root privileges",);
-                                sudo::with_env(&["HOME"])
-                                    .expect("Failed to acquire root privileges");
-                            }
-                            other => error_with_message(&format!(
-                                "Error creating parent directory: {other:?}"
-                            )),
+                if let Err(e) =
+                    create_dir_all(system_path.parent().expect("Path should have a parent"))
+                {
+                    match e.kind() {
+                        // Inform the user and retry with root privileges
+                        ErrorKind::PermissionDenied => {
+                            println!("Creating parent directories requires root privileges",);
+                            sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
                         }
-                    } else {
-                        create_symlink(origin, link);
+                        other => error_with_message(&format!(
+                            "Error creating parent directory: {other:?}"
+                        )),
                     }
-                // Parent paths shouldnt be created
                 } else {
-                    exit(1)
+                    create_symlink(config_path, system_path);
                 }
             }
             other => {
