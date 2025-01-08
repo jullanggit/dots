@@ -54,20 +54,23 @@ fn config_path(mut path: &Path, default_subdir: &str) -> PathBuf {
         exit(1);
     }
 
+    // Get the users home directory
     let home = env::var("HOME").expect("HOME env variable not set");
 
-    let mut origin = PathBuf::from(home);
-    origin.push(".config/rebos/files/");
+    let mut config_path = PathBuf::from(home);
+    config_path.push(".config/rebos/files/"); // And push the files/ directory onto it
 
-    if path.starts_with("/") {
-        origin.push(default_subdir);
+    // If the path started with "/", the default subdir was elided
+    if let Ok(relative_path) = path.strip_prefix("/") {
+        // So we add it
+        config_path.push(default_subdir);
 
-        path = path
-            .strip_prefix("/")
-            .expect("Checked that path starts with a '/'");
+        // And replace the absolute path with the relative one to avoid overwriting the entire config_path
+        path = relative_path
     }
-    origin.push(path);
-    origin
+    config_path.push(path);
+
+    config_path
 }
 
 fn add(path: &Path, default_subdir: &str) {
