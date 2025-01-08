@@ -110,17 +110,15 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
     if let Err(e) = symlink(config_path, system_path) {
         match e.kind() {
             ErrorKind::PermissionDenied => {
-                error_with_message("Insufficient permissions to create the symlink");
+                retry_with_root("Creating symlink");
             }
             ErrorKind::NotFound => {
                 if let Err(e) =
                     create_dir_all(system_path.parent().expect("Path should have a parent"))
                 {
                     match e.kind() {
-                        // Inform the user and retry with root privileges
                         ErrorKind::PermissionDenied => {
-                            println!("Creating parent directories requires root privileges",);
-                            sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
+                            retry_with_root("Creating parent directories");
                         }
                         other => error_with_message(&format!(
                             "Error creating parent directory: {other:?}"
@@ -137,6 +135,12 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
     };
 }
 
+// Inform the user and retry with root privileges
+fn retry_with_root(failed_action: &str) {
+    println!("{failed_action} requires root privileges",);
+    sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
+}
+
 #[expect(clippy::wildcard_enum_match_arm)]
 fn remove(path: &Path) {
     let path = system_path(path);
@@ -144,8 +148,7 @@ fn remove(path: &Path) {
         match e.kind() {
             // Inform the user and retry with root privileges
             ErrorKind::PermissionDenied => {
-                println!("Deleting symlink requires root privileges",);
-                sudo::with_env(&["HOME"]).expect("Failed to acquire root privileges");
+                retry_with_root("Deleting symlink");
             }
             other => error_with_message(&format!("Error deleting symlink: {other:?}")),
         }
