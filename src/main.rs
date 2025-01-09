@@ -109,7 +109,11 @@ fn add(path: &Path, default_subdir: &str) {
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
-    println!("Symlinking {}", system_path.display());
+    println!(
+        "Symlinking {} to {}",
+        system_path.display(),
+        config_path.display()
+    );
     create_symlink(&config_path, system_path);
 }
 
