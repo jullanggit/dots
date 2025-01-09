@@ -200,13 +200,10 @@ fn remove(path: &Path) {
 /// Converts the path relative to files/ to the location on the actual system. (by trimming the subdir of files/ away)
 fn system_path(path: &Path) -> &Path {
     if path.is_relative() {
-        // Skip the first component (the subdir of files/)
-        let mut components = path.components();
-        components
-            .next()
-            .expect("Path should have at least one component");
+        let str = path.as_os_str().to_str().unwrap();
 
-        components.as_path()
+        // Only keep the path from the first /
+        Path::new(&str[str.find('/').unwrap()..])
     } else {
         // The default subdir was elided, so the path is already the correct one
         path
