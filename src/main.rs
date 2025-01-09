@@ -1,5 +1,6 @@
 #![feature(let_chains)]
 
+use check::check;
 use std::{
     env::{self, current_exe},
     fs::{self, create_dir_all, remove_file, symlink_metadata},
@@ -8,6 +9,8 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command},
 };
+
+mod check;
 
 use clap::{Parser, Subcommand};
 
@@ -37,6 +40,11 @@ enum Commands {
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
     },
+    /// Return a list of all paths that are actually symlinked
+    Check {
+        /// The paths to check
+        to_check: Vec<String>,
+    },
 }
 
 fn main() {
@@ -48,6 +56,7 @@ fn main() {
             default_subdir,
         } => add(&path, &default_subdir),
         Commands::Remove { path } => remove(&path),
+        Commands::Check { to_check } => check(&to_check),
     }
 }
 
