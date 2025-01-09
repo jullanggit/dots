@@ -23,9 +23,9 @@ Intended File-structure:
 ```
 
 As you sometimes want files to differ on different machines, the 'files' directory is split in multiple sub-directories.
+{hostname} can be used as a placeholder for the actual hostname
 
 Intended usage: `{some sub-directory of files}/{the file path you want to symlink}` (For example: `common/etc/pacman.conf`)
 
 Because most of the time symlinks are against the common directory, you can just omit the "common". (For example: `/etc/pacman.conf`) (The default sub-dir can be configured with `--default-sub-dir`)
-
-An example managers/files.toml is included in this repo.
+Because most other symlinks are against the current hostname, "{hostname}" can be used as a placeholder. (For example: '{hostname}/etc/pacman.conf')
