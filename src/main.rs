@@ -52,6 +52,7 @@ fn main() {
 }
 
 /// Converts the path that should be symlinked to the path in the files/ directory
+#[expect(clippy::literal_string_with_formatting_args)]
 fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     if Path::new(default_subdir).is_absolute() {
         error_with_message("Default subdir is not allowed to be absolute");
@@ -73,7 +74,8 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
 
     // Replace "{hostname}" with the actual hostname
     if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
-        config_path.push(env::var("hostname").expect("Failed to get hostname"));
+        let hostname = fs::read_to_string("/etc/hostname").expect("Failed to get hostname");
+        config_path.push(hostname);
 
         cli_path = stripped_path;
     }
