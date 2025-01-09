@@ -101,11 +101,13 @@ fn add(path: &Path, default_subdir: &str) {
 
         // -> It isnt
         // Ask if the file should be overwritten
-        if !bool_question(&format!(
+        if bool_question(&format!(
             "The path {} already exists, overwrite?",
             system_path.display()
-        )) || !bool_question("Are you sure?")
+        )) && bool_question("Are you sure?")
         {
+            fs::remove_dir_all(system_path).expect("Failed to remove path");
+        } else {
             exit(1)
         }
     }
