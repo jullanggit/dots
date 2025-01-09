@@ -75,7 +75,7 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     // Replace "{hostname}" with the actual hostname
     if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
         let hostname = fs::read_to_string("/etc/hostname").expect("Failed to get hostname");
-        config_path.push(hostname);
+        config_path.push(hostname.trim());
 
         cli_path = stripped_path;
     }
