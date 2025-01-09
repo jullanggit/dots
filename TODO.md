@@ -1,4 +1,3 @@
 - Add import command
-- Allow using {hostname}
 - Import check coverage
 - Add support for a config file

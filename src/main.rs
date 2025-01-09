@@ -22,8 +22,9 @@ struct Cli {
 enum Commands {
     #[command(arg_required_else_help = true)]
     Add {
-        /// Format: {sub-dir of ~/.config/rebos/files}/{path to symlink}.
+        /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
         /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>
+        /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
 
         #[arg(default_value_t = {"common".into()}, short, long)]
@@ -31,8 +32,9 @@ enum Commands {
     },
     #[command(arg_required_else_help = true)]
     Remove {
-        /// Format: {sub-dir of ~/.config/rebos/files}/{path to symlink}
-        /// If the path is absolute, it is assumed to already be the path to remove, without trimming
+        /// Format: (sub-dir of ~/.config/rebos/files}/{path to symlink)
+        /// If the path is absolute, it is assumed to already be the path to remove
+        /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
     },
 }
@@ -50,7 +52,7 @@ fn main() {
 }
 
 /// Converts the path that should be symlinked to the path in the files/ directory
-fn config_path(mut path: &Path, default_subdir: &str) -> PathBuf {
+fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     if Path::new(default_subdir).is_absolute() {
         error_with_message("Default subdir is not allowed to be absolute");
     }
@@ -58,18 +60,25 @@ fn config_path(mut path: &Path, default_subdir: &str) -> PathBuf {
     // Get the users home directory
     let home = env::var("HOME").expect("HOME env variable not set");
 
-    let mut config_path = PathBuf::from(home);
-    config_path.push(".config/rebos/files/"); // And push the files/ directory onto it
+    let mut config_path = PathBuf::from(format!("{home}.config/rebos/files"));
 
     // If the path started with "/", the default subdir was elided
-    if let Ok(relative_path) = path.strip_prefix("/") {
+    if let Ok(relative_path) = cli_path.strip_prefix("/") {
         // So we add it
         config_path.push(default_subdir);
 
         // And replace the absolute path with the relative one to avoid overwriting the entire config_path
-        path = relative_path
+        cli_path = relative_path
     }
-    config_path.push(path);
+
+    // Replace "{hostname}" with the actual hostname
+    if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
+        config_path.push(env::var("hostname").expect("Failed to get hostname"));
+
+        cli_path = stripped_path;
+    }
+
+    config_path.push(cli_path);
 
     config_path
 }
