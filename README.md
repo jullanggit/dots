@@ -1,5 +1,10 @@
 A (dot)file manager using symlinks (intended for use in rebos/meta)
 
+In combination with something like rebos/meta it is basically a more powerful GNU Stow,
+which allows you to precisely contoll where in the file tree the symlink should be placed
+
+Apart from cleanup, the user shouldnt be required to manually interact with any files in the file tree
+
 Intended File-structure:
 ```
 .config/rebos
