@@ -61,7 +61,7 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     // Get the users home directory
     let home = env::var("HOME").expect("HOME env variable not set");
 
-    let mut config_path = PathBuf::from(format!("{home}.config/rebos/files"));
+    let mut config_path = PathBuf::from(format!("{home}/.config/rebos/files"));
 
     // If the path started with "/", the default subdir was elided
     if let Ok(relative_path) = cli_path.strip_prefix("/") {
@@ -113,8 +113,8 @@ fn add(path: &Path, default_subdir: &str) {
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
     println!(
         "Symlinking {} to {}",
+        config_path.display(),
         system_path.display(),
-        config_path.display()
     );
     create_symlink(&config_path, system_path);
 }
