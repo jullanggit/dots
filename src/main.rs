@@ -41,6 +41,7 @@ enum Commands {
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
     },
+    /// Outputs a list of all symlinks on the system that are probably made by dots
     List,
 }
 
@@ -219,6 +220,7 @@ fn remove(path: &Path) {
     }
 }
 
+/// Prints all symlinks on the system, that are probably made by dots
 fn list() {
     let files_path = files_path();
 
@@ -232,8 +234,12 @@ fn list() {
         .for_each(|entry| {
             // If the entry is a symlink, get its target
             if let Ok(target) = fs::read_link(entry.path()) {
-                // If the target is in the files/ dir, add the subpath to the items
-                if let Ok(stripped) = target.strip_prefix(&files_path) {
+                // If the target is in the files/ dir...
+                if let Ok(stripped) = target.strip_prefix(&files_path)
+                    // ...and was plausibly created by dots...
+                    && system_path(stripped) == entry.path()
+                {
+                    // ...add the subpath to the items
                     let mut items = items.lock().expect("Failed to lock items");
                     items.insert(stripped.to_owned());
                 }
