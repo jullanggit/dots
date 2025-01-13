@@ -87,7 +87,7 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
 
     // Replace "{hostname}" with the actual hostname
     if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
-        let hostname = fs::read_to_string("/etc/hostname").expect("Failed to get hostname");
+        let hostname = get_hostname();
         config_path.push(hostname.trim());
 
         cli_path = stripped_path;
@@ -96,6 +96,13 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     config_path.push(cli_path);
 
     config_path
+}
+
+fn get_hostname() -> String {
+    fs::read_to_string("/etc/hostname")
+        .expect("Failed to get hostname")
+        .trim()
+        .into()
 }
 
 /// Symlink a the given path to its location in the actual system
@@ -235,7 +242,20 @@ fn list() {
 
     let items = items.lock().expect("Failed to lock items");
     for item in items.iter() {
-        println!("{}", item.display());
+        // Convert to a string, so strip_prefix() doesnt remove leading slashes
+        let str = item.to_str().expect("Item should be valid UTF-8");
+
+        let formatted = str
+            // TODO: Dont hardcode this
+            .strip_prefix("common") // If the subdir is the default one, remove it
+            .map(Into::into)
+            // If the subdir is the current hostname, replace it with {hostname}
+            .or(str
+                .strip_prefix(&get_hostname())
+                .map(|str| format!("{{hostname}}{str}")))
+            .unwrap_or(str.into());
+
+        println!("{formatted}");
     }
 }
 
