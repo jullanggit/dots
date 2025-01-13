@@ -8,9 +8,11 @@ use std::{
     os::unix::fs::symlink,
     path::{Path, PathBuf},
     process::{exit, Command},
+    sync::Mutex,
 };
 
 use clap::{Parser, Subcommand};
+use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
@@ -213,23 +215,26 @@ fn remove(path: &Path) {
 fn list() {
     let files_path = files_path();
 
-    let mut items = HashSet::new();
+    let items = Mutex::new(HashSet::new());
 
     // TODO: Maybe make these configurable
     ["/etc".into(), "/usr/lib".into(), home()]
         .into_iter()
         .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
+        .par_bridge()
         .for_each(|entry| {
             // If the entry is a symlink, get its target
             if let Ok(target) = fs::read_link(entry.path()) {
                 // If the target is in the files/ dir, add the subpath to the items
                 if let Ok(stripped) = target.strip_prefix(&files_path) {
+                    let mut items = items.lock().expect("Failed to lock items");
                     items.insert(stripped.to_owned());
                 }
             }
         });
 
-    for item in items {
+    let items = items.lock().expect("Failed to lock items");
+    for item in items.iter() {
         println!("{}", item.display());
     }
 }
