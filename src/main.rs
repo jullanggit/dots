@@ -9,6 +9,7 @@ use std::{
     path::{Path, PathBuf},
     process::{exit, Command},
     sync::Mutex,
+    thread::{self},
 };
 
 use clap::{Parser, Subcommand};
@@ -226,25 +227,33 @@ fn list() {
 
     let items = Mutex::new(HashSet::new());
 
-    // TODO: Maybe make these configurable
-    ["/etc".into(), "/usr/lib".into(), home()]
-        .into_iter()
-        .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
-        .par_bridge()
-        .for_each(|entry| {
-            // If the entry is a symlink, get its target
-            if let Ok(target) = fs::read_link(entry.path()) {
-                // If the target is in the files/ dir...
-                if let Ok(stripped) = target.strip_prefix(&files_path)
-                    // ...and was plausibly created by dots...
-                    && system_path(stripped) == entry.path()
-                {
-                    // ...add the subpath to the items
-                    let mut items = items.lock().expect("Failed to lock items");
-                    items.insert(stripped.to_owned());
-                }
-            }
-        });
+    thread::scope(|s| {
+        // TODO: Make these configurable
+        ["/etc".into(), "/usr/lib".into(), home()]
+            .into_iter()
+            .for_each(|root_path| {
+                s.spawn(|| {
+                    WalkDir::new(root_path)
+                        .into_iter()
+                        .flatten()
+                        .par_bridge()
+                        .for_each(|entry| {
+                            // If the entry is a symlink, get its target
+                            if let Ok(target) = fs::read_link(entry.path()) {
+                                // If the target is in the files/ dir...
+                                if let Ok(stripped) = target.strip_prefix(&files_path)
+                                    // ...and was plausibly created by dots...
+                                    && system_path(stripped) == entry.path()
+                                {
+                                    // ...add the subpath to the items
+                                    let mut items = items.lock().expect("Failed to lock items");
+                                    items.insert(stripped.to_owned());
+                                }
+                            }
+                        });
+                });
+            })
+    });
 
     let items = items.lock().expect("Failed to lock items");
     for item in items.iter() {
