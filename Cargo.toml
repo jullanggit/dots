@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.11", features = ["derive"] }
-walkdir = "2.5.0"
+jwalk = "0.8.1"

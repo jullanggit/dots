@@ -11,7 +11,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
-use walkdir::WalkDir;
+use jwalk::WalkDir;
 
 #[derive(Parser, Debug)]
 #[command(name = "dots")]
@@ -218,7 +218,12 @@ fn list() {
     // TODO: Maybe make these configurable
     ["/etc".into(), "/usr/lib".into(), home()]
         .into_iter()
-        .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
+        .flat_map(|root_path| {
+            WalkDir::new(root_path)
+                .skip_hidden(false)
+                .into_iter()
+                .flatten()
+        })
         .for_each(|entry| {
             // If the entry is a symlink, get its target
             if let Ok(target) = fs::read_link(entry.path()) {
