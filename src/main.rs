@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
 use std::{
+    collections::HashSet,
     env::{self, current_exe},
     fs::{self, create_dir_all, remove_file, symlink_metadata},
     io::{stdin, stdout, ErrorKind, Write},
@@ -10,6 +11,7 @@ use std::{
 };
 
 use clap::{Parser, Subcommand};
+use walkdir::WalkDir;
 
 #[derive(Parser, Debug)]
 #[command(name = "dots")]
@@ -37,6 +39,7 @@ enum Commands {
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
     },
+    List,
 }
 
 fn main() {
@@ -48,7 +51,18 @@ fn main() {
             default_subdir,
         } => add(&path, &default_subdir),
         Commands::Remove { path } => remove(&path),
+        Commands::List => list(),
     }
+}
+
+/// The path of the files/ directory
+fn files_path() -> String {
+    format!("{}/.config/rebos/files", home())
+}
+
+/// The users home directory
+fn home() -> String {
+    env::var("HOME").expect("HOME env variable not set")
 }
 
 /// Converts the path that should be symlinked to the path in the files/ directory
@@ -58,10 +72,7 @@ fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
         error_with_message("Default subdir is not allowed to be absolute");
     }
 
-    // Get the users home directory
-    let home = env::var("HOME").expect("HOME env variable not set");
-
-    let mut config_path = PathBuf::from(format!("{home}/.config/rebos/files"));
+    let mut config_path = PathBuf::from(files_path());
 
     // If the path started with "/", the default subdir was elided
     if let Ok(relative_path) = cli_path.strip_prefix("/") {
@@ -196,6 +207,30 @@ fn remove(path: &Path) {
             }
             other => error_with_message(&format!("Error deleting symlink: {other:?}")),
         }
+    }
+}
+
+fn list() {
+    let files_path = files_path();
+
+    let mut items = HashSet::new();
+
+    // TODO: Maybe make these configurable
+    ["/etc".into(), "/usr/lib".into(), home()]
+        .into_iter()
+        .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
+        .for_each(|entry| {
+            // If the entry is a symlink, get its target
+            if let Ok(target) = fs::read_link(entry.path()) {
+                // If the target is in the files/ dir, add the subpath to the items
+                if let Ok(stripped) = target.strip_prefix(&files_path) {
+                    items.insert(stripped.to_owned());
+                }
+            }
+        });
+
+    for item in items {
+        println!("{}", item.display());
     }
 }
 
