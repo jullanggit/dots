@@ -232,8 +232,10 @@ fn list() {
         .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
         .par_bridge()
         .for_each(|entry| {
-            // If the entry is a symlink, get its target
-            if let Ok(target) = fs::read_link(entry.path()) {
+            // If the entry is a symlink...
+            if entry.path_is_symlink() {
+                // ...get its target
+                let target = fs::read_link(entry.path()).expect("Failed to get target");
                 // If the target is in the files/ dir...
                 if let Ok(stripped) = target.strip_prefix(&files_path)
                     // ...and was plausibly created by dots...
