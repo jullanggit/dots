@@ -3,10 +3,7 @@ use std::{collections::HashSet, fs, sync::Mutex};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::WalkDir;
 
-use crate::{
-    system_path,
-    util::{files_path, get_hostname, home},
-};
+use crate::util::{files_path, get_hostname, home, system_path};
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list() {

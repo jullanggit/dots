@@ -1,6 +1,6 @@
 use std::{fs::remove_file, io::ErrorKind, path::Path};
 
-use crate::{rerun_with_root, system_path};
+use crate::util::{rerun_with_root, system_path};
 
 #[expect(clippy::wildcard_enum_match_arm)]
 pub fn remove(path: &Path) {
