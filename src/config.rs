@@ -8,6 +8,8 @@ pub static CONFIG: LazyLock<Config> = LazyLock::new(Config::load);
 pub struct Config {
     /// The default subdir of files/
     pub default_subdir: String,
+    /// The path to the files/ directory
+    pub files_path: String,
     /// The paths that should be searched by list()
     pub list_paths: Vec<String>,
 }
@@ -26,6 +28,7 @@ impl Config {
 
             match key {
                 "default_subdir" => config.default_subdir = value.trim().to_owned(),
+                "files_path" => config.files_path = value.trim().to_owned(),
                 "list_paths" => config
                     .list_paths
                     .extend(value.split(',').map(|value| value.trim().to_string())),

@@ -7,11 +7,6 @@ use std::{
 
 use crate::config::CONFIG;
 
-/// The path of the files/ directory
-pub fn files_path() -> String {
-    format!("{}/.config/rebos/files", home())
-}
-
 /// The users home directory
 pub fn home() -> String {
     env::var("HOME").expect("HOME env variable not set")
@@ -77,7 +72,7 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
         panic!("Default subdir is not allowed to be absolute");
     }
 
-    let mut config_path = PathBuf::from(files_path());
+    let mut config_path = PathBuf::from(&CONFIG.files_path);
 
     // If the path started with "/", the default subdir was elided
     if let Ok(relative_path) = cli_path.strip_prefix("/") {

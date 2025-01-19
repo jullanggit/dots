@@ -5,13 +5,11 @@ use walkdir::WalkDir;
 
 use crate::{
     config::CONFIG,
-    util::{files_path, get_hostname, system_path},
+    util::{get_hostname, system_path},
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list() {
-    let files_path = files_path();
-
     let items = Mutex::new(HashSet::new());
 
     CONFIG
@@ -25,7 +23,7 @@ pub fn list() {
                 // ...get its target
                 let target = fs::read_link(entry.path()).expect("Failed to get target");
                 // If the target is in the files/ dir...
-                if let Ok(stripped) = target.strip_prefix(&files_path)
+                if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
                     // ...and was plausibly created by dots...
                     && system_path(stripped) == entry.path()
                 {
