@@ -1,4 +1,2 @@
-- Add import command
-- Import check coverage
 - Add support for a config file
 - Add tests

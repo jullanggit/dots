@@ -9,7 +9,7 @@ use std::{
 use crate::util::{config_path, rerun_with_root, system_path};
 
 /// Symlink a the given path to its location in the actual system
-pub fn add(path: &Path, default_subdir: &str) {
+pub fn add(path: &Path, default_subdir: &str, force: bool) {
     let config_path = config_path(path, default_subdir);
     let system_path = system_path(path);
 
@@ -24,10 +24,11 @@ pub fn add(path: &Path, default_subdir: &str) {
 
         // -> It isnt
         // Ask if the file should be overwritten
-        if bool_question(&format!(
-            "The path {} already exists, overwrite?",
-            system_path.display()
-        )) && bool_question("Are you sure?")
+        if force
+            || bool_question(&format!(
+                "The path {} already exists, overwrite?",
+                system_path.display()
+            )) && bool_question("Are you sure?")
         {
             fs::remove_dir_all(system_path).expect("Failed to remove path");
         } else {
@@ -60,7 +61,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
                         ErrorKind::PermissionDenied => {
                             rerun_with_root("Creating parent directories");
                         }
-                        other => panic!("Error creating parent directory: {other:?}"),
+                        other => panic!("Error creating parent directory: {other}"),
                     }
                 } else {
                     create_symlink(config_path, system_path);
