@@ -30,7 +30,11 @@ pub fn add(path: &Path, force: bool) {
                 system_path.display()
             )) && bool_question("Are you sure?")
         {
-            fs::remove_dir_all(system_path).expect("Failed to remove path");
+            if system_path.is_dir() {
+                fs::remove_dir_all(system_path).expect("Failed to remove path");
+            } else {
+                fs::remove_file(system_path).expect("Failed to remove path");
+            }
         } else {
             exit(1)
         }

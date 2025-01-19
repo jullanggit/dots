@@ -26,7 +26,7 @@ impl Config {
                 .split_once('=')
                 .expect("Config entry should contain a '='");
 
-            match key {
+            match key.trim() {
                 "default_subdir" => config.default_subdir = value.trim().to_owned(),
                 "files_path" => config.files_path = value.trim().to_owned(),
                 "list_paths" => config
