@@ -7,7 +7,7 @@ use std::{
 };
 
 use crate::{
-    error_with_message, rerun_with_root, system_path,
+    rerun_with_root, system_path,
     util::{files_path, get_hostname},
 };
 
@@ -51,7 +51,7 @@ pub fn add(path: &Path, default_subdir: &str) {
 #[expect(clippy::literal_string_with_formatting_args)]
 fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     if Path::new(default_subdir).is_absolute() {
-        error_with_message("Default subdir is not allowed to be absolute");
+        panic!("Default subdir is not allowed to be absolute");
     }
 
     let mut config_path = PathBuf::from(files_path());
@@ -94,9 +94,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
                         ErrorKind::PermissionDenied => {
                             rerun_with_root("Creating parent directories");
                         }
-                        other => error_with_message(&format!(
-                            "Error creating parent directory: {other:?}"
-                        )),
+                        other => panic!("Error creating parent directory: {other:?}"),
                     }
                 } else {
                     create_symlink(config_path, system_path);

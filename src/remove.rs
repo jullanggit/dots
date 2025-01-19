@@ -1,6 +1,6 @@
 use std::{fs::remove_file, io::ErrorKind, path::Path};
 
-use crate::{error_with_message, rerun_with_root, system_path};
+use crate::{rerun_with_root, system_path};
 
 #[expect(clippy::wildcard_enum_match_arm)]
 pub fn remove(path: &Path) {
@@ -11,7 +11,7 @@ pub fn remove(path: &Path) {
             ErrorKind::PermissionDenied => {
                 rerun_with_root("Deleting symlink");
             }
-            other => error_with_message(&format!("Error deleting symlink: {other:?}")),
+            other => panic!("Error deleting symlink: {other:?}"),
         }
     }
 }

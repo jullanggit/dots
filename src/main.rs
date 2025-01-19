@@ -100,9 +100,3 @@ fn system_path(path: &Path) -> &Path {
         path
     }
 }
-
-// Not sure if theres a builtin for this
-fn error_with_message(message: &str) -> ! {
-    eprintln!("{message}");
-    exit(1)
-}
