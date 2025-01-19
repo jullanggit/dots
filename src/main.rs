@@ -19,6 +19,7 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Add the given path to the system
     #[command(arg_required_else_help = true)]
     Add {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
@@ -30,6 +31,7 @@ enum Commands {
         /// Overwrite the destination without asking
         force: bool,
     },
+    /// Remove the given path from the system (does not remove the files the path points to, only the symlink)
     #[command(arg_required_else_help = true)]
     Remove {
         /// Format: (sub-dir of ~/.config/rebos/files}/{path to symlink)
