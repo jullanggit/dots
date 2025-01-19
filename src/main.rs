@@ -1,19 +1,16 @@
 #![feature(let_chains)]
 
-use std::{
-    collections::HashSet,
-    env::{self, current_exe},
-    fs::{self, create_dir_all, remove_file, symlink_metadata},
-    io::{stdin, stdout, ErrorKind, Write},
-    os::unix::fs::symlink,
-    path::{Path, PathBuf},
-    process::{exit, Command},
-    sync::Mutex,
-};
+mod add;
+mod list;
+mod remove;
+mod util;
 
 use clap::{Parser, Subcommand};
-use rayon::iter::{ParallelBridge, ParallelIterator};
-use walkdir::WalkDir;
+use std::{
+    env::{self, current_exe},
+    path::{Path, PathBuf},
+    process::{exit, Command},
+};
 
 #[derive(Parser, Debug)]
 #[command(name = "dots")]
@@ -52,125 +49,10 @@ fn main() {
         Commands::Add {
             path,
             default_subdir,
-        } => add(&path, &default_subdir),
-        Commands::Remove { path } => remove(&path),
-        Commands::List => list(),
+        } => add::add(&path, &default_subdir),
+        Commands::Remove { path } => remove::remove(&path),
+        Commands::List => list::list(),
     }
-}
-
-/// The path of the files/ directory
-fn files_path() -> String {
-    format!("{}/.config/rebos/files", home())
-}
-
-/// The users home directory
-fn home() -> String {
-    env::var("HOME").expect("HOME env variable not set")
-}
-
-/// Converts the path that should be symlinked to the path in the files/ directory
-#[expect(clippy::literal_string_with_formatting_args)]
-fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
-    if Path::new(default_subdir).is_absolute() {
-        error_with_message("Default subdir is not allowed to be absolute");
-    }
-
-    let mut config_path = PathBuf::from(files_path());
-
-    // If the path started with "/", the default subdir was elided
-    if let Ok(relative_path) = cli_path.strip_prefix("/") {
-        // So we add it
-        config_path.push(default_subdir);
-
-        // And replace the absolute path with the relative one to avoid overwriting the entire config_path
-        cli_path = relative_path
-    }
-
-    // Replace "{hostname}" with the actual hostname
-    if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
-        let hostname = get_hostname();
-        config_path.push(hostname.trim());
-
-        cli_path = stripped_path;
-    }
-
-    config_path.push(cli_path);
-
-    config_path
-}
-
-fn get_hostname() -> String {
-    fs::read_to_string("/etc/hostname")
-        .expect("Failed to get hostname")
-        .trim()
-        .into()
-}
-
-/// Symlink a the given path to its location in the actual system
-fn add(path: &Path, default_subdir: &str) {
-    let config_path = config_path(path, default_subdir);
-    let system_path = system_path(path);
-
-    // If the path already exists
-    if symlink_metadata(system_path).is_ok() {
-        // Check if it is a symlink that points to the correct location
-        if let Ok(destination) = fs::read_link(system_path)
-            && destination == config_path
-        {
-            return;
-        }
-
-        // -> It isnt
-        // Ask if the file should be overwritten
-        if bool_question(&format!(
-            "The path {} already exists, overwrite?",
-            system_path.display()
-        )) && bool_question("Are you sure?")
-        {
-            fs::remove_dir_all(system_path).expect("Failed to remove path");
-        } else {
-            exit(1)
-        }
-    }
-
-    // At this point the path either doesn't exist yet, or the user has decided to overwrite it
-    println!(
-        "Symlinking {} to {}",
-        config_path.display(),
-        system_path.display(),
-    );
-    create_symlink(&config_path, system_path);
-}
-
-/// Creates a symlink from `config_path` to `system_path`
-fn create_symlink(config_path: &Path, system_path: &Path) {
-    // Try creating the symlink
-    if let Err(e) = symlink(config_path, system_path) {
-        match e.kind() {
-            ErrorKind::PermissionDenied => {
-                rerun_with_root("Creating symlink");
-            }
-            ErrorKind::NotFound => {
-                if let Err(e) =
-                    create_dir_all(system_path.parent().expect("Path should have a parent"))
-                {
-                    match e.kind() {
-                        ErrorKind::PermissionDenied => {
-                            rerun_with_root("Creating parent directories");
-                        }
-                        other => error_with_message(&format!(
-                            "Error creating parent directory: {other:?}"
-                        )),
-                    }
-                } else {
-                    create_symlink(config_path, system_path);
-                }
-            }
-            other => {
-                println!("Error creating symlink: {other:?}");
-            }
-        }
-    };
 }
 
 /// Inform the user of the `failed_action` and rerun with root privileges
@@ -206,67 +88,6 @@ fn rerun_with_root(failed_action: &str) -> ! {
     }
 }
 
-#[expect(clippy::wildcard_enum_match_arm)]
-fn remove(path: &Path) {
-    let path = system_path(path);
-    if let Err(e) = remove_file(path) {
-        match e.kind() {
-            // Inform the user and retry with root privileges
-            ErrorKind::PermissionDenied => {
-                rerun_with_root("Deleting symlink");
-            }
-            other => error_with_message(&format!("Error deleting symlink: {other:?}")),
-        }
-    }
-}
-
-/// Prints all symlinks on the system, that are probably made by dots
-fn list() {
-    let files_path = files_path();
-
-    let items = Mutex::new(HashSet::new());
-
-    // TODO: Maybe make these configurable
-    ["/etc".into(), "/usr/lib".into(), home()]
-        .into_iter()
-        .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
-        .par_bridge()
-        .for_each(|entry| {
-            // If the entry is a symlink...
-            if entry.path_is_symlink() {
-                // ...get its target
-                let target = fs::read_link(entry.path()).expect("Failed to get target");
-                // If the target is in the files/ dir...
-                if let Ok(stripped) = target.strip_prefix(&files_path)
-                    // ...and was plausibly created by dots...
-                    && system_path(stripped) == entry.path()
-                {
-                    // ...add the subpath to the items
-                    let mut items = items.lock().expect("Failed to lock items");
-                    items.insert(stripped.to_owned());
-                }
-            }
-        });
-
-    let items = items.lock().expect("Failed to lock items");
-    for item in items.iter() {
-        // Convert to a string, so strip_prefix() doesnt remove leading slashes
-        let str = item.to_str().expect("Item should be valid UTF-8");
-
-        let formatted = str
-            // TODO: Dont hardcode this
-            .strip_prefix("common") // If the subdir is the default one, remove it
-            .map(Into::into)
-            // If the subdir is the current hostname, replace it with {hostname}
-            .or(str
-                .strip_prefix(&get_hostname())
-                .map(|str| format!("{{hostname}}{str}")))
-            .unwrap_or(str.into());
-
-        println!("{formatted}");
-    }
-}
-
 /// Converts the path relative to files/ to the location on the actual system. (by trimming the subdir of files/ away)
 fn system_path(path: &Path) -> &Path {
     if path.is_relative() {
@@ -277,32 +98,6 @@ fn system_path(path: &Path) -> &Path {
     } else {
         // The default subdir was elided, so the path is already the correct one
         path
-    }
-}
-
-/// Asks the user the given question and returns the users answer.
-/// Returns false if getting the answer failed
-fn bool_question(question: &str) -> bool {
-    print!("{question} ");
-
-    if stdout().flush().is_err() {
-        return false;
-    }
-
-    let mut buffer = String::with_capacity(3); // The longest accepted answer is 3 characters long
-
-    loop {
-        buffer.clear();
-
-        if stdin().read_line(&mut buffer).is_err() {
-            return false;
-        }
-
-        match buffer.trim() {
-            "y" | "Y" | "yes" | "Yes" => return true,
-            "n" | "N" | "no" | "No" => return false,
-            _other => continue,
-        }
     }
 }
 
