@@ -3,7 +3,10 @@ use std::{collections::HashSet, fs, sync::Mutex};
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::WalkDir;
 
-use crate::util::{files_path, get_hostname, home, system_path};
+use crate::{
+    config::CONFIG,
+    util::{files_path, get_hostname, system_path},
+};
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list() {
@@ -11,9 +14,9 @@ pub fn list() {
 
     let items = Mutex::new(HashSet::new());
 
-    // TODO: Maybe make these configurable
-    ["/etc".into(), "/usr/lib".into(), home()]
-        .into_iter()
+    CONFIG
+        .list_paths
+        .iter()
         .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
         .par_bridge()
         .for_each(|entry| {
@@ -39,8 +42,7 @@ pub fn list() {
         let str = item.to_str().expect("Item should be valid UTF-8");
 
         let formatted = str
-            // TODO: Dont hardcode this
-            .strip_prefix("common") // If the subdir is the default one, remove it
+            .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
             .map(Into::into)
             // If the subdir is the current hostname, replace it with {hostname}
             .or(str

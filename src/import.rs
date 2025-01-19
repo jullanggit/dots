@@ -6,8 +6,8 @@ use crate::{
 };
 
 /// Imports the given config path from the system path
-pub fn import(cli_path: &Path, default_subdir: &str) {
-    let config_path = config_path(cli_path, default_subdir);
+pub fn import(cli_path: &Path) {
+    let config_path = config_path(cli_path);
     let system_path = system_path(cli_path);
 
     // Copy system path to config path
@@ -17,5 +17,5 @@ pub fn import(cli_path: &Path, default_subdir: &str) {
             other => panic!("Error copying system path to config path: {other}"),
         }
     }
-    add(cli_path, default_subdir, true);
+    add(cli_path, true);
 }

@@ -9,8 +9,8 @@ use std::{
 use crate::util::{config_path, rerun_with_root, system_path};
 
 /// Symlink a the given path to its location in the actual system
-pub fn add(path: &Path, default_subdir: &str, force: bool) {
-    let config_path = config_path(path, default_subdir);
+pub fn add(path: &Path, force: bool) {
+    let config_path = config_path(path);
     let system_path = system_path(path);
 
     // If the path already exists

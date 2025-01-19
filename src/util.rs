@@ -5,6 +5,8 @@ use std::{
     process::{exit, Command},
 };
 
+use crate::config::CONFIG;
+
 /// The path of the files/ directory
 pub fn files_path() -> String {
     format!("{}/.config/rebos/files", home())
@@ -70,8 +72,8 @@ pub fn system_path(path: &Path) -> &Path {
 
 /// Converts the path that should be symlinked to the path in the files/ directory
 #[expect(clippy::literal_string_with_formatting_args)]
-pub fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
-    if Path::new(default_subdir).is_absolute() {
+pub fn config_path(mut cli_path: &Path) -> PathBuf {
+    if Path::new(&CONFIG.default_subdir).is_absolute() {
         panic!("Default subdir is not allowed to be absolute");
     }
 
@@ -80,7 +82,7 @@ pub fn config_path(mut cli_path: &Path, default_subdir: &str) -> PathBuf {
     // If the path started with "/", the default subdir was elided
     if let Ok(relative_path) = cli_path.strip_prefix("/") {
         // So we add it
-        config_path.push(default_subdir);
+        config_path.push(&CONFIG.default_subdir);
 
         // And replace the absolute path with the relative one to avoid overwriting the entire config_path
         cli_path = relative_path

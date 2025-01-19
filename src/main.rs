@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
 mod add;
+mod config;
 mod import;
 mod list;
 mod remove;
@@ -25,9 +26,6 @@ enum Commands {
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
 
-        #[arg(default_value_t = {"common".into()}, short, long)]
-        default_subdir: String,
-
         #[arg(short, long)]
         /// Overwrite the destination without asking
         force: bool,
@@ -46,9 +44,6 @@ enum Commands {
         /// If the path is absolute, it is assumed to already be the path to remove
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
-
-        #[arg(default_value_t = {"common".into()}, short, long)]
-        default_subdir: String,
     },
     /// Outputs a list of all symlinks on the system that are probably made by dots
     List,
@@ -58,16 +53,9 @@ fn main() {
     let args = Cli::parse();
 
     match args.command {
-        Commands::Add {
-            path,
-            default_subdir,
-            force,
-        } => add::add(&path, &default_subdir, force),
+        Commands::Add { path, force } => add::add(&path, force),
         Commands::Remove { path } => remove::remove(&path),
-        Commands::Import {
-            path,
-            default_subdir,
-        } => import::import(&path, &default_subdir),
+        Commands::Import { path } => import::import(&path),
         Commands::List => list::list(),
     }
 }
