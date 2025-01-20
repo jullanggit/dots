@@ -30,10 +30,17 @@ pub fn add(path: &Path, force: bool) {
                 system_path.display()
             )) && bool_question("Are you sure?")
         {
-            if system_path.is_dir() {
-                fs::remove_dir_all(system_path).expect("Failed to remove path");
+            let result = if system_path.is_dir() {
+                fs::remove_dir_all(system_path)
             } else {
-                fs::remove_file(system_path).expect("Failed to remove path");
+                fs::remove_file(system_path)
+            };
+            if let Err(e) = result {
+                if e.kind() == ErrorKind::PermissionDenied {
+                    rerun_with_root("Removing path");
+                } else {
+                    panic!("Error removing path: {e}");
+                }
             }
         } else {
             exit(1)
