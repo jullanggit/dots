@@ -1,1 +1,4 @@
 - Add tests
+- Print diff when asking for overwrite
+- Dont ask for overwrite again when rerunning with root
+- Add check-coverage for checking how much of the files in the files_dir are actually symlinked
