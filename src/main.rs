@@ -8,11 +8,14 @@ mod remove;
 mod util;
 
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::OnceLock};
 
 #[derive(Parser, Debug)]
 #[command(name = "dots")]
 struct Cli {
+    #[arg(short, long)]
+    /// Only output the found items
+    silent: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -48,20 +51,20 @@ enum Commands {
         path: PathBuf,
     },
     /// Outputs a list of all symlinks on the system that are probably made by dots
-    List {
-        #[arg(short, long)]
-        /// Only output the found items
-        silent: bool,
-    },
+    List,
 }
+
+static SILENT: OnceLock<bool> = OnceLock::new();
 
 fn main() {
     let args = Cli::parse();
+
+    SILENT.set(args.silent);
 
     match args.command {
         Commands::Add { path, force } => add::add(&path, force),
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path } => import::import(&path),
-        Commands::List { silent } => list::list(silent),
+        Commands::List => list::list(),
     }
 }

@@ -28,6 +28,9 @@ All paths are in the format described above.
 ### List
 - Paths to search for symlinks can be configured in the config file under the `list_paths` key
 
+## Options:
+- silent: suppress any non-primary output
+
 ## Config file
 ### Location
 `{home}/.config/dots`

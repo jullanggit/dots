@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
-pub fn list(silent: bool) {
+pub fn list() {
     let items = Mutex::new(HashSet::new());
 
     CONFIG
@@ -23,7 +23,7 @@ pub fn list(silent: bool) {
                     && let Some(e) = e.io_error()
                     && e.kind() == ErrorKind::PermissionDenied
                 {
-                    rerun_with_root(if silent { "" } else { "Reading root list dir" })
+                    rerun_with_root("Reading root list dir")
                 }
             })
         })
