@@ -1,11 +1,11 @@
-use std::{collections::HashSet, fs, sync::Mutex};
+use std::{collections::HashSet, fs, io::ErrorKind, sync::Mutex};
 
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::WalkDir;
 
 use crate::{
     config::CONFIG,
-    util::{get_hostname, system_path},
+    util::{get_hostname, rerun_with_root, system_path},
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
@@ -15,8 +15,19 @@ pub fn list() {
     CONFIG
         .list_paths
         .iter()
-        .flat_map(|root_path| WalkDir::new(root_path).into_iter().flatten())
+        .flat_map(|root_path| WalkDir::new(root_path).into_iter())
         .par_bridge()
+        .map(|entry| {
+            entry.inspect_err(|e| {
+                if e.depth() == 0
+                    && let Some(e) = e.io_error()
+                    && e.kind() == ErrorKind::PermissionDenied
+                {
+                    rerun_with_root("Reading root list dir")
+                }
+            })
+        })
+        .flatten()
         .for_each(|entry| {
             // If the entry is a symlink...
             if entry.path_is_symlink() {
