@@ -59,7 +59,7 @@ static SILENT: OnceLock<bool> = OnceLock::new();
 fn main() {
     let args = Cli::parse();
 
-    SILENT.set(args.silent);
+    SILENT.set(args.silent).expect("Failed to set SILENT");
 
     match args.command {
         Commands::Add { path, force } => add::add(&path, force),
