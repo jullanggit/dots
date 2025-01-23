@@ -5,7 +5,7 @@ use std::{
     process::{exit, Command},
 };
 
-use crate::config::CONFIG;
+use crate::{config::CONFIG, SILENT};
 
 /// The users home directory
 pub fn home() -> String {
@@ -21,7 +21,9 @@ pub fn get_hostname() -> String {
 
 /// Inform the user of the `failed_action` and rerun with root privileges
 pub fn rerun_with_root(failed_action: &str) -> ! {
-    println!("{failed_action} requires root privileges",);
+    if !SILENT.get().unwrap() {
+        println!("{failed_action} requires root privileges",);
+    }
 
     // Collect args
     let mut args: Vec<_> = env::args().collect();
