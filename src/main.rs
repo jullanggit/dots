@@ -48,7 +48,11 @@ enum Commands {
         path: PathBuf,
     },
     /// Outputs a list of all symlinks on the system that are probably made by dots
-    List,
+    List {
+        #[arg(short, long)]
+        /// Only output the found items
+        silent: bool,
+    },
 }
 
 fn main() {
@@ -58,6 +62,6 @@ fn main() {
         Commands::Add { path, force } => add::add(&path, force),
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path } => import::import(&path),
-        Commands::List => list::list(),
+        Commands::List { silent } => list::list(silent),
     }
 }
