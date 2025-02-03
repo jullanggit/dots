@@ -7,6 +7,7 @@ use std::{
     fs::{self},
     sync::{mpsc::channel, Mutex},
     thread::{self, available_parallelism},
+    time::Duration,
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
@@ -33,7 +34,11 @@ pub fn list(rooted: bool) {
         for _ in 0..available_parallelism().unwrap().get() {
             scope.spawn(|| {
                 // While the channel is open, wait for a path
-                while let Ok(path) = receiver.lock().unwrap().recv() {
+                while let Ok(path) = receiver
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_micros(20))
+                {
                     // For each DirEntry under the path (ignoring errors using .flatten())
                     fs::read_dir(path).unwrap().flatten().for_each(|dir_entry| {
                         let file_type = dir_entry.file_type().unwrap();
