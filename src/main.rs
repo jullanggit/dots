@@ -51,7 +51,11 @@ enum Commands {
         path: PathBuf,
     },
     /// Outputs a list of all symlinks on the system that are probably made by dots
-    List,
+    List {
+        #[arg(short, long)]
+        /// Assume that the current user is root
+        rooted: bool,
+    },
 }
 
 static SILENT: OnceLock<bool> = OnceLock::new();
@@ -65,6 +69,6 @@ fn main() {
         Commands::Add { path, force } => add::add(&path, force),
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path } => import::import(&path),
-        Commands::List => list::list(),
+        Commands::List { rooted } => list::list(rooted),
     }
 }
