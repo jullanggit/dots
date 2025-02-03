@@ -24,9 +24,15 @@ pub fn rerun_with_root(failed_action: &str) -> ! {
     if !SILENT.get().unwrap() {
         println!("{failed_action} requires root privileges",);
     }
+    rerun_with_root_args(&[]);
+}
 
+/// Rerun with root privileges, and add the provided args to the command
+pub fn rerun_with_root_args(args: &[&str]) -> ! {
     // Collect args
-    let mut args: Vec<_> = env::args().collect();
+    let mut args: Vec<_> = env::args()
+        .chain(args.iter().map(|&str| str.to_owned()))
+        .collect();
 
     // Overwrite the exe path with the absolute path if possible
     if let Some(absolute_path) = current_exe()
