@@ -35,4 +35,9 @@ All paths are in the format described above.
 ### Location
 `{home}/.config/dots`
 ### Format
-key = value(,value,value)
+- default_subdir & files_path:
+  - key = value
+- list_paths
+  - key = value(,value,value)
+- root
+  - True if specified, false otherwise
