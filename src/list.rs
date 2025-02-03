@@ -5,7 +5,7 @@ use crate::{
 use std::{
     collections::HashSet,
     fs::{self},
-    sync::{mpsc::channel, Mutex},
+    sync::Mutex,
     thread::{self, available_parallelism},
 };
 
@@ -18,8 +18,7 @@ pub fn list(rooted: bool) {
     let items = Mutex::new(HashSet::new());
 
     // Create the workque, using a sender/receiver channel
-    let (sender, receiver) = channel();
-    let receiver = Mutex::new(receiver);
+    let (sender, receiver) = flume::unbounded();
 
     // Send initial root paths
     // TODO: Run with root if necessary (make this a config option)
@@ -33,7 +32,7 @@ pub fn list(rooted: bool) {
         for _ in 0..available_parallelism().unwrap().get() {
             scope.spawn(|| {
                 // While the channel is open, wait for a path
-                while let Ok(path) = receiver.lock().unwrap().recv() {
+                while let Ok(path) = receiver.recv() {
                     // For each DirEntry under the path (ignoring errors using .flatten())
                     fs::read_dir(path).unwrap().flatten().for_each(|dir_entry| {
                         let file_type = dir_entry.file_type().unwrap();
