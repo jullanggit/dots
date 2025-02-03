@@ -1,6 +1,6 @@
 use crate::{
     config::CONFIG,
-    util::{get_hostname, system_path},
+    util::{get_hostname, rerun_with_root, system_path},
 };
 use std::{
     collections::HashSet,
@@ -11,6 +11,10 @@ use std::{
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list() {
+    if CONFIG.root {
+        rerun_with_root("List was requested to be run with root");
+    }
+
     let items = Mutex::new(HashSet::new());
 
     // Create the workque, using a sender/receiver channel
