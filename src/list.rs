@@ -5,7 +5,7 @@ use crate::{
 use std::{
     collections::HashSet,
     fs::{self},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     thread::{self, available_parallelism},
 };
 
@@ -15,7 +15,7 @@ pub fn list(rooted: bool) {
         rerun_with_root_args(&["--rooted"]);
     }
 
-    let items = Mutex::new(HashSet::new());
+    let items = Arc::new(Mutex::new(HashSet::new()));
 
     // Create the workque, using a sender/receiver channel
     let (sender, receiver) = flume::unbounded();
@@ -30,7 +30,11 @@ pub fn list(rooted: bool) {
     thread::scope(|scope| {
         // For each available cpu core
         for _ in 0..available_parallelism().unwrap().get() {
-            scope.spawn(|| {
+            let sender = sender.clone();
+            let receiver = receiver.clone();
+            let items = Arc::clone(&items);
+
+            scope.spawn(move || {
                 // While the channel is open, wait for a path
                 while let Ok(path) = receiver.recv() {
                     // For each DirEntry under the path (ignoring errors using .flatten())
@@ -57,6 +61,7 @@ pub fn list(rooted: bool) {
                 }
             });
         }
+        drop(sender);
     });
 
     let items = items.lock().expect("Failed to lock items");
