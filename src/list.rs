@@ -1,4 +1,10 @@
-use std::{collections::HashSet, fs, io::ErrorKind, sync::Mutex};
+use std::{
+    collections::HashSet,
+    fs::{self, FileType},
+    io::ErrorKind,
+    path::PathBuf,
+    sync::Mutex,
+};
 
 use rayon::iter::{ParallelBridge, ParallelIterator};
 use walkdir::WalkDir;
@@ -12,38 +18,36 @@ use crate::{
 pub fn list() {
     let items = Mutex::new(HashSet::new());
 
-    CONFIG
+    let mut paths_to_search: Vec<PathBuf> = CONFIG
         .list_paths
         .iter()
-        .flat_map(|root_path| WalkDir::new(root_path).into_iter())
-        .par_bridge()
-        .map(|entry| {
-            entry.inspect_err(|e| {
-                if e.depth() == 0
-                    && let Some(e) = e.io_error()
-                    && e.kind() == ErrorKind::PermissionDenied
-                {
-                    rerun_with_root("Reading root list dir")
+        .map(|string| string.into())
+        .collect();
+
+    let mut i = 0;
+    while i < paths_to_search.len() {
+        fs::read_dir(&paths_to_search[i])
+            .unwrap()
+            .flatten()
+            .for_each(|dir_entry| {
+                let file_type = dir_entry.file_type().unwrap();
+                if file_type.is_symlink() {
+                    // get its target
+                    let target = fs::read_link(dir_entry.path()).expect("Failed to get target");
+                    // If the target is in the files/ dir...
+                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+                        // ...and was plausibly created by dots...
+                        && system_path(stripped) == dir_entry.path()
+                    {
+                        // ...add the subpath to the items
+                        let mut items = items.lock().expect("Failed to lock items");
+                        items.insert(stripped.to_owned());
+                    }
+                } else if file_type.is_dir() {
+                    paths_to_search.push(dir_entry.path());
                 }
-            })
-        })
-        .flatten()
-        .for_each(|entry| {
-            // If the entry is a symlink...
-            if entry.path_is_symlink() {
-                // ...get its target
-                let target = fs::read_link(entry.path()).expect("Failed to get target");
-                // If the target is in the files/ dir...
-                if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                    // ...and was plausibly created by dots...
-                    && system_path(stripped) == entry.path()
-                {
-                    // ...add the subpath to the items
-                    let mut items = items.lock().expect("Failed to lock items");
-                    items.insert(stripped.to_owned());
-                }
-            }
-        });
+            });
+    }
 
     let items = items.lock().expect("Failed to lock items");
     for item in items.iter() {
