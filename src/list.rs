@@ -1,53 +1,60 @@
-use std::{
-    collections::HashSet,
-    fs::{self, FileType},
-    io::ErrorKind,
-    path::PathBuf,
-    sync::Mutex,
-};
-
-use rayon::iter::{ParallelBridge, ParallelIterator};
-use walkdir::WalkDir;
-
 use crate::{
     config::CONFIG,
-    util::{get_hostname, rerun_with_root, system_path},
+    util::{get_hostname, system_path},
+};
+use std::{
+    collections::HashSet,
+    fs::{self},
+    sync::{mpsc::channel, Mutex},
+    thread::{self, available_parallelism},
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list() {
     let items = Mutex::new(HashSet::new());
 
-    let mut paths_to_search: Vec<PathBuf> = CONFIG
-        .list_paths
-        .iter()
-        .map(|string| string.into())
-        .collect();
+    // Create the workque, using a sender/receiver channel
+    let (sender, receiver) = channel();
+    let receiver = Mutex::new(receiver);
 
-    let mut i = 0;
-    while i < paths_to_search.len() {
-        fs::read_dir(&paths_to_search[i])
-            .unwrap()
-            .flatten()
-            .for_each(|dir_entry| {
-                let file_type = dir_entry.file_type().unwrap();
-                if file_type.is_symlink() {
-                    // get its target
-                    let target = fs::read_link(dir_entry.path()).expect("Failed to get target");
-                    // If the target is in the files/ dir...
-                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                        // ...and was plausibly created by dots...
-                        && system_path(stripped) == dir_entry.path()
-                    {
-                        // ...add the subpath to the items
-                        let mut items = items.lock().expect("Failed to lock items");
-                        items.insert(stripped.to_owned());
-                    }
-                } else if file_type.is_dir() {
-                    paths_to_search.push(dir_entry.path());
+    // Send initial root paths
+    // TODO: Run with root if necessary (make this a config option)
+    for root_path in &CONFIG.list_paths {
+        sender.send(root_path.into()).unwrap();
+    }
+
+    // Create a thread scope
+    thread::scope(|scope| {
+        // For each available cpu core
+        for _ in 0..available_parallelism().unwrap().get() {
+            scope.spawn(|| {
+                // While the channel is open, wait for a path
+                while let Ok(path) = receiver.lock().unwrap().recv() {
+                    // For each DirEntry under the path (ignoring errors using .flatten())
+                    fs::read_dir(path).unwrap().flatten().for_each(|dir_entry| {
+                        let file_type = dir_entry.file_type().unwrap();
+                        if file_type.is_symlink() {
+                            // get the entries target
+                            let target =
+                                fs::read_link(dir_entry.path()).expect("Failed to get target");
+                            // If the target is in the files/ dir...
+                            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+                                // ...and was plausibly created by dots...
+                                && system_path(stripped) == dir_entry.path()
+                            {
+                                // ...add the subpath to the items
+                                let mut items = items.lock().expect("Failed to lock items");
+                                items.insert(stripped.to_owned());
+                            }
+                        } else if file_type.is_dir() {
+                            // Add the path to the queue
+                            sender.send(dir_entry.path()).unwrap();
+                        }
+                    });
                 }
             });
-    }
+        }
+    });
 
     let items = items.lock().expect("Failed to lock items");
     for item in items.iter() {
