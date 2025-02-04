@@ -60,7 +60,8 @@ enum Commands {
 
 static SILENT: OnceLock<bool> = OnceLock::new();
 
-fn main() {
+#[tokio::main(flavor = "current_thread")]
+async fn main() {
     let args = Cli::parse();
 
     SILENT.set(args.silent).expect("Failed to set SILENT");
@@ -69,6 +70,6 @@ fn main() {
         Commands::Add { path, force } => add::add(&path, force),
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path } => import::import(&path),
-        Commands::List { rooted } => list::list(rooted),
+        Commands::List { rooted } => list::list(rooted).await,
     }
 }
