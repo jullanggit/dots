@@ -1,3 +1,5 @@
+use ignore::{WalkBuilder, WalkState};
+
 use crate::{
     config::CONFIG,
     util::{get_hostname, rerun_with_root_args, system_path},
@@ -5,6 +7,7 @@ use crate::{
 use std::{
     collections::{HashSet, VecDeque},
     fs::{self},
+    sync::Mutex,
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
@@ -13,35 +16,42 @@ pub fn list(rooted: bool) {
         rerun_with_root_args(&["--rooted"]);
     }
 
-    let mut items = HashSet::new();
+    let items = Mutex::new(HashSet::new());
 
-    // Create the queue
-    let mut queue = VecDeque::from_iter(CONFIG.list_paths.iter().map(|string| string.into()));
-
-    // While there are items to process
-    while let Some(path) = queue.pop_front() {
-        // For each DirEntry under the path (ignoring errors using .flatten())
-        fs::read_dir(path).unwrap().flatten().for_each(|dir_entry| {
-            let file_type = dir_entry.file_type().unwrap();
-            if file_type.is_symlink() {
-                // get the entries target
-                let target = fs::read_link(dir_entry.path()).expect("Failed to get target");
-                // If the target is in the files/ dir...
-                if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                    // ...and was plausibly created by dots...
-                    && system_path(stripped) == dir_entry.path()
-                {
-                    // ...add the subpath to the items
-                    items.insert(stripped.to_owned());
-                }
-            } else if file_type.is_dir() {
-                // Add the path to the queue
-                queue.push_back(dir_entry.path());
-            }
-        });
+    let mut walker = WalkBuilder::new(&CONFIG.list_paths[0]);
+    for dir in CONFIG.list_paths.iter().skip(1) {
+        walker.add(dir);
     }
+    walker.follow_links(false);
 
-    for item in items.iter() {
+    walker.ignore(false);
+    walker.hidden(false);
+    walker.git_ignore(false);
+    walker.git_exclude(false);
+
+    walker.build_parallel().run(|| {
+        Box::new(|entry| {
+            if let Ok(entry) = entry {
+                // If the entry is a symlink...
+                if entry.path_is_symlink() {
+                    // ...get its target
+                    let target = fs::read_link(entry.path()).expect("Failed to get target");
+                    // If the target is in the files/ dir...
+                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+                        // ...and was plausibly created by dots...
+                        && system_path(stripped) == entry.path()
+                    {
+                        // ...add the subpath to the items
+                        let mut items = items.lock().expect("Failed to lock items");
+                        items.insert(stripped.to_owned());
+                    }
+                }
+            }
+            WalkState::Continue
+        })
+    });
+
+    for item in items.lock().unwrap().iter() {
         // Convert to a string, so strip_prefix() doesnt remove leading slashes
         let str = item.to_str().expect("Item should be valid UTF-8");
 
