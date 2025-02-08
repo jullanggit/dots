@@ -1,14 +1,13 @@
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Notify;
 
 use crate::{
     config::CONFIG,
     util::{get_hostname, rerun_with_root_args, system_path},
 };
 use std::{
-    collections::HashSet,
     path::PathBuf,
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -25,7 +24,7 @@ pub fn list(rooted: bool) {
                 rerun_with_root_args(&["--rooted"]);
             }
 
-            let items = Arc::new(Mutex::new(HashSet::new()));
+            let items = Arc::new(Mutex::new(Vec::new()));
 
             // The amount of currently pending operations
             let pending = Arc::new(AtomicUsize::new(0));
@@ -47,7 +46,7 @@ pub fn list(rooted: bool) {
             // Wait for all operations to complete
             notify.notified().await;
 
-            for item in items.lock().await.iter() {
+            for item in items.lock().unwrap().iter() {
                 // Convert to a string, so strip_prefix() doesnt remove leading slashes
                 let str = item.to_str().expect("Item should be valid UTF-8");
 
@@ -67,7 +66,7 @@ pub fn list(rooted: bool) {
 
 async fn process_dir(
     path: PathBuf,
-    items: Arc<Mutex<HashSet<PathBuf>>>,
+    items: Arc<Mutex<Vec<PathBuf>>>,
     pending: Arc<AtomicUsize>,
     notify: Arc<Notify>,
 ) {
@@ -88,7 +87,7 @@ async fn process_dir(
                 && system_path(stripped) == dir_entry.path()
             {
                 // ...add the subpath to the items
-                items.lock().await.insert(stripped.to_owned());
+                items.lock().unwrap().push(stripped.to_owned());
             }
         } else if file_type.is_dir() {
             // Recurse into the dir
