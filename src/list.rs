@@ -1,4 +1,4 @@
-use tokio::sync::Notify;
+use tokio::sync::{Notify, Semaphore};
 
 use crate::{
     config::CONFIG,
@@ -31,6 +31,8 @@ pub fn list(rooted: bool) {
             // The notification when no operations are pending anymore
             let notify = Arc::new(Notify::new());
 
+            let sem = Arc::new(Semaphore::new(900));
+
             // Add initial paths
             for path in &CONFIG.list_paths {
                 pending.fetch_add(1, Ordering::AcqRel);
@@ -40,6 +42,7 @@ pub fn list(rooted: bool) {
                     items.clone(),
                     pending.clone(),
                     notify.clone(),
+                    sem.clone(),
                 ));
             }
 
@@ -69,7 +72,10 @@ async fn process_dir(
     items: Arc<Mutex<Vec<PathBuf>>>,
     pending: Arc<AtomicUsize>,
     notify: Arc<Notify>,
+    sem: Arc<Semaphore>,
 ) {
+    let _permit = sem.acquire().await.unwrap();
+
     // Iterate over dir entries
     let mut read_dir = tokio::fs::read_dir(path).await.unwrap();
     while let Some(dir_entry) = read_dir.next_entry().await.unwrap() {
@@ -98,6 +104,7 @@ async fn process_dir(
                 items.clone(),
                 pending.clone(),
                 notify.clone(),
+                sem.clone(),
             ));
         }
     }
