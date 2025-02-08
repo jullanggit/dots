@@ -1,16 +1,10 @@
-use tokio::sync::{Notify, Semaphore};
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 use crate::{
     config::CONFIG,
     util::{get_hostname, rerun_with_root_args, system_path},
 };
-use std::{
-    path::PathBuf,
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
+use std::{path::PathBuf, sync::Arc};
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list(rooted: bool) {
@@ -24,40 +18,26 @@ pub fn list(rooted: bool) {
                 rerun_with_root_args(&["--rooted"]);
             }
 
-            // The amount of currently pending operations
-            let pending = Arc::new(AtomicUsize::new(0));
-            // The notification when no operations are pending anymore
-            let notify = Arc::new(Notify::new());
+            let num_sems = 900;
 
-            let sem = Arc::new(Semaphore::new(900));
+            let sem = Arc::new(Semaphore::new(num_sems));
 
             // Add initial paths
             for path in &CONFIG.list_paths {
-                pending.fetch_add(1, Ordering::AcqRel);
-
-                tokio::spawn(process_dir(
-                    path.into(),
-                    pending.clone(),
-                    notify.clone(),
-                    sem.clone(),
-                ));
+                let permit = sem.clone().acquire_owned().await.unwrap();
+                tokio::spawn(process_dir(path.into(), sem.clone(), permit));
             }
 
-            // Wait for all operations to complete
-            notify.notified().await;
+            // Try acquiring all permits, will only be successful once all threads have dropped theirs
+            let _last = sem.acquire_many(num_sems as _).await.unwrap();
         });
 }
 
-async fn process_dir(
-    path: PathBuf,
-    pending: Arc<AtomicUsize>,
-    notify: Arc<Notify>,
-    sem: Arc<Semaphore>,
-) {
-    let _permit = sem.acquire().await.unwrap();
-
+// Pass the permit to the function, to avoid the delay between the function getting called
+// and a permit being acquired, which can lead to inconsistencies
+async fn process_dir(path: PathBuf, sem: Arc<Semaphore>, _permit: OwnedSemaphorePermit) {
     // Iterate over dir entries
-    let mut read_dir = tokio::fs::read_dir(path).await.unwrap();
+    let mut read_dir = tokio::fs::read_dir(&path).await.unwrap();
     while let Some(dir_entry) = read_dir.next_entry().await.unwrap() {
         // Get the file type
         let file_type = dir_entry.file_type().await.unwrap();
@@ -87,20 +67,11 @@ async fn process_dir(
                 println!("{formatted}");
             }
         } else if file_type.is_dir() {
+            println!("i ran too");
+            let permit = sem.clone().acquire_owned().await.unwrap();
+            println!("i ran tooo");
             // Recurse into the dir
-            pending.fetch_add(1, Ordering::Release);
-
-            tokio::spawn(process_dir(
-                dir_entry.path(),
-                pending.clone(),
-                notify.clone(),
-                sem.clone(),
-            ));
+            tokio::spawn(process_dir(dir_entry.path(), sem.clone(), permit));
         }
-    }
-
-    // Remove ourselves from the pending, notify if we're the last one
-    if pending.fetch_sub(1, Ordering::AcqRel) == 1 {
-        notify.notify_waiters();
     }
 }
