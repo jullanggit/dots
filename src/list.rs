@@ -15,19 +15,24 @@ use std::{
 
 /// Prints all symlinks on the system, that are probably made by dots
 pub fn list(rooted: bool) {
+    // Start the tokio runtime
     tokio::runtime::Builder::new_multi_thread()
         .build()
         .unwrap()
         .block_on(async {
+            // Rerun with root if required
             if CONFIG.root && !rooted {
                 rerun_with_root_args(&["--rooted"]);
             }
 
             let items = Arc::new(Mutex::new(HashSet::new()));
 
+            // The amount of currently pending operations
             let pending = Arc::new(AtomicUsize::new(0));
+            // The notification when no operations are pending anymore
             let notify = Arc::new(Notify::new());
 
+            // Add initial paths
             for path in &CONFIG.list_paths {
                 pending.fetch_add(1, Ordering::AcqRel);
 
@@ -39,6 +44,7 @@ pub fn list(rooted: bool) {
                 ));
             }
 
+            // Wait for all operations to complete
             notify.notified().await;
 
             for item in items.lock().await.iter() {
@@ -65,9 +71,12 @@ async fn process_dir(
     pending: Arc<AtomicUsize>,
     notify: Arc<Notify>,
 ) {
+    // Iterate over dir entries
     let mut read_dir = tokio::fs::read_dir(path).await.unwrap();
     while let Some(dir_entry) = read_dir.next_entry().await.unwrap() {
+        // Get the file type
         let file_type = dir_entry.file_type().await.unwrap();
+
         if file_type.is_symlink() {
             // get the entries target
             let target = tokio::fs::read_link(dir_entry.path())
@@ -82,7 +91,9 @@ async fn process_dir(
                 items.lock().await.insert(stripped.to_owned());
             }
         } else if file_type.is_dir() {
+            // Recurse into the dir
             pending.fetch_add(1, Ordering::Release);
+
             tokio::spawn(process_dir(
                 dir_entry.path(),
                 items.clone(),
@@ -92,6 +103,7 @@ async fn process_dir(
         }
     }
 
+    // Remove ourselves from the pending, notify if we're the last one
     if pending.fetch_sub(1, Ordering::AcqRel) == 1 {
         notify.notify_waiters();
     }
