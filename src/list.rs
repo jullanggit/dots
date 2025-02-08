@@ -7,7 +7,7 @@ use crate::{
 use std::{
     path::PathBuf,
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicUsize, Ordering},
     },
 };
@@ -24,8 +24,6 @@ pub fn list(rooted: bool) {
                 rerun_with_root_args(&["--rooted"]);
             }
 
-            let items = Arc::new(Mutex::new(Vec::new()));
-
             // The amount of currently pending operations
             let pending = Arc::new(AtomicUsize::new(0));
             // The notification when no operations are pending anymore
@@ -39,7 +37,6 @@ pub fn list(rooted: bool) {
 
                 tokio::spawn(process_dir(
                     path.into(),
-                    items.clone(),
                     pending.clone(),
                     notify.clone(),
                     sem.clone(),
@@ -48,28 +45,11 @@ pub fn list(rooted: bool) {
 
             // Wait for all operations to complete
             notify.notified().await;
-
-            for item in items.lock().unwrap().iter() {
-                // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                let str = item.to_str().expect("Item should be valid UTF-8");
-
-                let formatted = str
-                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                    .map(Into::into)
-                    // If the subdir is the current hostname, replace it with {hostname}
-                    .or(str
-                        .strip_prefix(&get_hostname())
-                        .map(|str| format!("{{hostname}}{str}")))
-                    .unwrap_or(str.into());
-
-                println!("{formatted}");
-            }
         });
 }
 
 async fn process_dir(
     path: PathBuf,
-    items: Arc<Mutex<Vec<PathBuf>>>,
     pending: Arc<AtomicUsize>,
     notify: Arc<Notify>,
     sem: Arc<Semaphore>,
@@ -92,8 +72,19 @@ async fn process_dir(
                 // ...and was plausibly created by dots...
                 && system_path(stripped) == dir_entry.path()
             {
-                // ...add the subpath to the items
-                items.lock().unwrap().push(stripped.to_owned());
+                // Convert to a string, so strip_prefix() doesnt remove leading slashes
+                let str = stripped.to_str().expect("Item should be valid UTF-8");
+
+                let formatted = str
+                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                    .map(Into::into)
+                    // If the subdir is the current hostname, replace it with {hostname}
+                    .or(str
+                        .strip_prefix(&get_hostname())
+                        .map(|str| format!("{{hostname}}{str}")))
+                    .unwrap_or(str.into());
+
+                println!("{formatted}");
             }
         } else if file_type.is_dir() {
             // Recurse into the dir
@@ -101,7 +92,6 @@ async fn process_dir(
 
             tokio::spawn(process_dir(
                 dir_entry.path(),
-                items.clone(),
                 pending.clone(),
                 notify.clone(),
                 sem.clone(),
