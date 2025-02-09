@@ -41,3 +41,6 @@ All paths are in the format described above.
   - key = value(,value,value)
 - root
   - True if specified, false otherwise
+
+## Building
+- Dots has to be built with the nightly toolchain.
