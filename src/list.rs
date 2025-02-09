@@ -29,10 +29,12 @@ pub fn list(rooted: bool) {
             // The notification when no operations are pending anymore
             let notify = Arc::new(Notify::new());
 
+            // Represents the max number of concurrently open fd's
             let sem = Arc::new(Semaphore::new(900));
 
             // Add initial paths
             for path in &CONFIG.list_paths {
+                // Increment the number of pending operations
                 pending.fetch_add(1, Ordering::AcqRel);
 
                 tokio::spawn(process_dir(
@@ -48,12 +50,15 @@ pub fn list(rooted: bool) {
         });
 }
 
+// Recursively processes the given path, printing found items to stdout
 async fn process_dir(
     path: PathBuf,
     pending: Arc<AtomicUsize>,
     notify: Arc<Notify>,
     sem: Arc<Semaphore>,
 ) {
+    // Avoid hitting the fd limit.
+    // Is dropped at the end of the scope
     let _permit = sem.acquire().await.unwrap();
 
     // Iterate over dir entries
@@ -87,9 +92,10 @@ async fn process_dir(
                 println!("{formatted}");
             }
         } else if file_type.is_dir() {
-            // Recurse into the dir
+            // Increment the number of pending operations
             pending.fetch_add(1, Ordering::Release);
 
+            // Recurse into the dir
             tokio::spawn(process_dir(
                 dir_entry.path(),
                 pending.clone(),
@@ -99,7 +105,8 @@ async fn process_dir(
         }
     }
 
-    // Remove ourselves from the pending, notify if we're the last one
+    // Decrement the number of pending operations
+    // Notify if we're the last operation
     if pending.fetch_sub(1, Ordering::AcqRel) == 1 {
         notify.notify_waiters();
     }
