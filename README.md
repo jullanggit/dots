@@ -42,5 +42,5 @@ All paths are in the format described above.
 - root
   - True if specified, false otherwise
 
-## Building
-- Dots has to be built with the nightly toolchain.
+## Installing
+`RUSTFLAGS=-Znext-solver cargo +nightly install --git https://github.com/jullanggit/dots dots`
