@@ -1,11 +1,11 @@
 ## What
-A (dot)file manager using symlinks (intended for use in [meta](https://github.com/jullanggit/meta)).
+A (dot)file manager using symlinks (intended for use in [atem](https://github.com/jullanggit/atem)).
 
 Can be understood as a more powerful GNU Stow, which allows you to precisely control where in the file tree the symlink should be placed.
 
 ## How
 Dots operates on a file tree containing the paths you want to symlink.
-The location of this file tree has to be set using the `files_path` key in the config file (recommendation: `{home}/.config/meta/files`)
+The location of this file tree has to be set using the `files_path` key in the config file (recommendation: `{home}/.config/atem/files`)
 
 The `files_path` directory is split in multiple sub-directories, to allow for different files on different machines.
 
