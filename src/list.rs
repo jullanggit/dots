@@ -123,7 +123,8 @@ fn list_copy(items: Vec<String>) {
         let config_path = config_path(path);
         let system_path = system_path(path);
 
-        if paths_equal(&config_path, system_path).is_err() {
+        // If the path is on the system, print it to stdout
+        if paths_equal(&config_path, system_path).is_ok() {
             println!("{item}");
         }
     }
