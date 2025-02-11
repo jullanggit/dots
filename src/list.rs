@@ -2,9 +2,13 @@ use tokio::sync::{Notify, Semaphore};
 
 use crate::{
     config::CONFIG,
-    util::{config_path, get_hostname, paths_equal, rerun_with_root_args, system_path},
+    util::{
+        config_path, get_hostname, paths_equal, rerun_with_root, rerun_with_root_args, system_path,
+    },
 };
 use std::{
+    fs,
+    io::ErrorKind,
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -123,9 +127,26 @@ fn list_copy(items: Vec<String>) {
         let config_path = config_path(path);
         let system_path = system_path(path);
 
-        // If the path is on the system, print it to stdout
-        if paths_equal(&config_path, system_path).is_ok() {
-            println!("{item}");
+        // If path exists on the system
+        match fs::exists(path) {
+            Ok(exists) => {
+                if exists {
+                    // Check if the paths are equal
+                    if paths_equal(&config_path, system_path).is_ok() {
+                        println!("{item}");
+                    }
+                }
+            }
+            Err(e) => {
+                if e.kind() == ErrorKind::PermissionDenied {
+                    rerun_with_root("Checking if the path already exists")
+                } else {
+                    panic!(
+                        "Error checking if the path '{}' already exists: {e}",
+                        path.display()
+                    )
+                }
+            }
         }
     }
 }
