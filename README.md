@@ -44,3 +44,7 @@ All paths are in the format described above.
 
 ## Installing
 `RUSTFLAGS=-Znext-solver cargo +nightly install --git https://github.com/jullanggit/dots dots`
+
+## Usage
+- This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me.
+- Please do report any errors/bugs if you encounter them
