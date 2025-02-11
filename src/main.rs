@@ -64,7 +64,7 @@ enum Commands {
         /// Assume that the current user is root
         rooted: bool,
 
-        #[arg(long)]
+        #[arg(long, trailing_var_arg = true, num_args(1..))]
         copy: Option<Vec<String>>,
     },
 }
