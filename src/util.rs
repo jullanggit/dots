@@ -1,7 +1,7 @@
 use std::{
     env::{self, current_exe},
     fs::{self, File},
-    io::{BufReader, Read as _},
+    io::{self, BufReader, ErrorKind, Read as _},
     path::{Path, PathBuf},
     process::{Command, exit},
 };
@@ -109,8 +109,14 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
 /// Does *not* currently support directories
 pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'static str> {
     // Get metadatas
-    let system_metadata = fs::symlink_metadata(system_path).unwrap(); // TODO: handle permissionedenied
-    let config_metadata = fs::symlink_metadata(config_path).unwrap(); // TODO: handle permissionedenied
+    let system_metadata = rerun_with_root_if_permission_denied(
+        fs::symlink_metadata(system_path),
+        "getting metadata for system path",
+    );
+    let config_metadata = rerun_with_root_if_permission_denied(
+        fs::symlink_metadata(config_path),
+        "getting metadata for config path",
+    );
 
     if system_metadata.file_type() != config_metadata.file_type() {
         Err("Path already exists and differs in file type")
@@ -118,14 +124,23 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
         Err("Path already exists and differs in len")
     } else if system_metadata.permissions() != config_metadata.permissions() {
         Err("Path already exists and differs in permissions")
+        // If they are symlinks
     } else if system_metadata.file_type().is_symlink()
-    // TODO: handle PermissionDenied
-        && fs::read_link(system_path).unwrap() != fs::read_link(system_path).unwrap()
+    // And their destinations dont match
+        && rerun_with_root_if_permission_denied(
+            fs::read_link(system_path),
+            "reading symlink destination for system path",
+        ) != rerun_with_root_if_permission_denied(
+            fs::read_link(system_path),
+            "reading symlink destination for system path",
+        )
     {
         Err("Path already exists and differs in symlink destination")
     } else if system_metadata.file_type().is_file() {
-        let system_file = File::open(system_path).unwrap(); // TODO: handle PermissionDenied
-        let config_file = File::open(config_path).unwrap(); // TODO: handle PermissionDenied
+        let system_file =
+            rerun_with_root_if_permission_denied(File::open(system_path), "opening system file");
+        let config_file =
+            rerun_with_root_if_permission_denied(File::open(config_path), "opening config file");
 
         let mut system_reader = BufReader::new(system_file);
         let mut config_reader = BufReader::new(config_file);
@@ -134,8 +149,14 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
         let mut config_buf = [0; 4096];
 
         loop {
-            let system_read = system_reader.read(&mut system_buf).unwrap(); // TODO: handle PermissionDenied
-            let config_read = config_reader.read(&mut config_buf).unwrap(); // TODO: handle PermissionDenied
+            let system_read = rerun_with_root_if_permission_denied(
+                system_reader.read(&mut system_buf),
+                "reading system file",
+            );
+            let config_read = rerun_with_root_if_permission_denied(
+                config_reader.read(&mut config_buf),
+                "reading config file",
+            );
 
             if system_read != config_read {
                 return Err("Path already exists and differs in content length");
@@ -147,5 +168,19 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
         }
     } else {
         Ok(())
+    }
+}
+
+/// Inform the user of the `failed_action` and rerun with root privileges, if the result is a PermissionDenied, panic on any other error
+pub fn rerun_with_root_if_permission_denied<T>(result: io::Result<T>, action: &str) -> T {
+    match result {
+        Ok(inner) => inner,
+        Err(e) => {
+            if e.kind() == ErrorKind::PermissionDenied {
+                rerun_with_root(action)
+            } else {
+                panic!("Error {action}: {e}",)
+            }
+        }
     }
 }

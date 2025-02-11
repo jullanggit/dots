@@ -6,7 +6,9 @@ use std::{
     process::exit,
 };
 
-use crate::util::{config_path, paths_equal, rerun_with_root, system_path};
+use crate::util::{
+    config_path, paths_equal, rerun_with_root, rerun_with_root_if_permission_denied, system_path,
+};
 
 /// Symlink a the given path to its location in the actual system
 pub fn add(path: &Path, force: bool, copy: bool) {
@@ -78,7 +80,10 @@ pub fn add_copy(path: &Path, force: bool) {
         config_path.display(),
         system_path.display(),
     );
-    fs::copy(config_path, system_path).unwrap(); // TODO: Handle PermissionDenied
+    rerun_with_root_if_permission_denied(
+        fs::copy(config_path, system_path),
+        "copying config path to system path",
+    );
 }
 
 /// Asks for overwrite and removes the path from the system if requested, exits if not
