@@ -51,28 +51,15 @@ pub fn add_copy(path: &Path, force: bool) {
     }
 
     // If path exists on the system
-    match fs::exists(path) {
-        Ok(exists) => {
-            if exists {
-                // Check if the paths are equal
-                if let Err(e) = paths_equal(&config_path, system_path) {
-                    eprintln!("{e}");
-
-                    ask_for_overwrite(force, system_path);
-                }
-            }
-        }
-        Err(e) => {
-            if e.kind() == ErrorKind::PermissionDenied {
-                rerun_with_root("Checking if the path already exists")
-            } else {
-                panic!(
-                    "Error checking if the path '{}' already exists: {e}",
-                    path.display()
-                )
-            }
-        }
-    }
+    if rerun_with_root_if_permission_denied(
+        fs::exists(path),
+        &format!("checking if the path {} already exists", path.display()),
+        // And is not equal to the one in the config
+    ) && let Err(e) = paths_equal(&config_path, system_path)
+    {
+        eprintln!("{e}");
+        ask_for_overwrite(force, system_path);
+    };
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
     println!(
@@ -99,13 +86,8 @@ fn ask_for_overwrite(force: bool, system_path: &Path) {
         } else {
             fs::remove_file(system_path)
         };
-        if let Err(e) = result {
-            if e.kind() == ErrorKind::PermissionDenied {
-                rerun_with_root("Removing path");
-            } else {
-                panic!("Error removing path: {e}");
-            }
-        }
+
+        rerun_with_root_if_permission_denied(result, "removing path");
     } else {
         exit(1)
     }
@@ -120,18 +102,12 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
                 rerun_with_root("Creating symlink");
             }
             ErrorKind::NotFound => {
-                if let Err(e) =
-                    create_dir_all(system_path.parent().expect("Path should have a parent"))
-                {
-                    match e.kind() {
-                        ErrorKind::PermissionDenied => {
-                            rerun_with_root("Creating parent directories");
-                        }
-                        other => panic!("Error creating parent directory: {other}"),
-                    }
-                } else {
-                    create_symlink(config_path, system_path);
-                }
+                rerun_with_root_if_permission_denied(
+                    create_dir_all(system_path.parent().expect("Path should have a parent")),
+                    "creating parent directories",
+                );
+
+                create_symlink(config_path, system_path);
             }
             other => {
                 println!("Error creating symlink: {other:?}");

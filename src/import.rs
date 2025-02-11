@@ -1,12 +1,12 @@
 use std::{
     fs,
-    io::{self, ErrorKind},
+    io::{self},
     path::Path,
 };
 
 use crate::{
     add::add,
-    util::{config_path, rerun_with_root, system_path},
+    util::{config_path, rerun_with_root_if_permission_denied, system_path},
 };
 
 /// Imports the given config path from the system path
@@ -25,16 +25,15 @@ pub fn import(cli_path: &Path, copy: bool) {
         fs::copy(system_path, &config_path).map(|_| ())
     };
 
-    if let Err(e) = copy_result {
-        match e.kind() {
-            ErrorKind::PermissionDenied => rerun_with_root("Copying system path to config path"),
-            other => panic!(
-                "Error copying system path ({}) to config path ({}): {other}",
-                system_path.display(),
-                config_path.display()
-            ),
-        }
-    }
+    rerun_with_root_if_permission_denied(
+        copy_result,
+        &format!(
+            "copying system path ({}) to config path ({})",
+            system_path.display(),
+            config_path.display()
+        ),
+    );
+
     add(cli_path, true, copy);
 }
 
