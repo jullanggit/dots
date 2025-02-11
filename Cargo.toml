@@ -1,9 +1,20 @@
 cargo-features = ["codegen-backend"]
 
 [package]
-name = "dots"
+name = "atem-dots"
 version = "0.1.0"
 edition = "2024"
+description = "A (dot)file manager"
+authors = ["Jul Lang <jullanggit@proton.me>"]
+repository = "https://github.com/jullanggit/atem-dots"
+readme = "README.md"
+license = "MIT"
+categories = ["command-line-utilities", "config"]
+keywords = ["dotfiles"]
+
+[[bin]]
+name = "dots"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5.11", features = ["derive"] }

@@ -1,5 +1,5 @@
 ## What
-A (dot)file manager using symlinks (intended for use in [atem](https://github.com/jullanggit/atem)).
+A (dot)file manager using symlinks (intended for use in [atem](https://github.com/jullanggit/atem), but can also be used standalone).
 
 Can be understood as a more powerful GNU Stow, which allows you to precisely control where in the file tree the symlink should be placed.
 
