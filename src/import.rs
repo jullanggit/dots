@@ -10,9 +10,13 @@ use crate::{
 };
 
 /// Imports the given config path from the system path
-pub fn import(cli_path: &Path) {
+pub fn import(cli_path: &Path, copy: bool) {
     let config_path = config_path(cli_path);
     let system_path = system_path(cli_path);
+
+    if copy && system_path.is_dir() {
+        panic!("Only files and symlinks are currently supported with --copy")
+    }
 
     // Copy system path to config path
     let copy_result = if system_path.is_dir() {
@@ -31,7 +35,7 @@ pub fn import(cli_path: &Path) {
             ),
         }
     }
-    add(cli_path, true);
+    add(cli_path, true, copy);
 }
 
 /// Recursively copies the source directory to the target path

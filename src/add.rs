@@ -1,15 +1,19 @@
 use std::{
     fs::{self, create_dir_all, symlink_metadata},
-    io::{stdin, stdout, ErrorKind, Write},
+    io::{ErrorKind, Write, stdin, stdout},
     os::unix::fs::symlink,
     path::Path,
     process::exit,
 };
 
-use crate::util::{config_path, rerun_with_root, system_path};
+use crate::util::{config_path, paths_equal, rerun_with_root, system_path};
 
 /// Symlink a the given path to its location in the actual system
-pub fn add(path: &Path, force: bool) {
+pub fn add(path: &Path, force: bool, copy: bool) {
+    if copy {
+        return add_copy(path, force);
+    }
+
     let config_path = config_path(path);
     let system_path = system_path(path);
 
@@ -23,28 +27,7 @@ pub fn add(path: &Path, force: bool) {
         }
 
         // -> It isnt
-        // Ask if the file should be overwritten
-        if force
-            || bool_question(&format!(
-                "The path {} already exists, overwrite?",
-                system_path.display()
-            )) && bool_question("Are you sure?")
-        {
-            let result = if system_path.is_dir() {
-                fs::remove_dir_all(system_path)
-            } else {
-                fs::remove_file(system_path)
-            };
-            if let Err(e) = result {
-                if e.kind() == ErrorKind::PermissionDenied {
-                    rerun_with_root("Removing path");
-                } else {
-                    panic!("Error removing path: {e}");
-                }
-            }
-        } else {
-            exit(1)
-        }
+        ask_for_overwrite(force, system_path);
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -54,6 +37,73 @@ pub fn add(path: &Path, force: bool) {
         system_path.display(),
     );
     create_symlink(&config_path, system_path);
+}
+
+/// Symlink a the given path to its location in the actual system
+pub fn add_copy(path: &Path, force: bool) {
+    let config_path = config_path(path);
+    let system_path = system_path(path);
+
+    if config_path.is_dir() {
+        panic!("Only files and symlinks are currently supported with --copy")
+    }
+
+    // If path exists on the system
+    match fs::exists(path) {
+        Ok(exists) => {
+            if exists {
+                // Check if the paths are equal
+                if let Err(e) = paths_equal(&config_path, system_path) {
+                    eprintln!("{e}");
+
+                    ask_for_overwrite(force, system_path);
+                }
+            }
+        }
+        Err(e) => {
+            if e.kind() == ErrorKind::PermissionDenied {
+                rerun_with_root("Checking if the path already exists")
+            } else {
+                panic!(
+                    "Error checking if the path '{}' already exists: {e}",
+                    path.display()
+                )
+            }
+        }
+    }
+
+    // At this point the path either doesn't exist yet, or the user has decided to overwrite it
+    println!(
+        "Copying {} to {}",
+        config_path.display(),
+        system_path.display(),
+    );
+    fs::copy(config_path, system_path).unwrap(); // TODO: Handle PermissionDenied
+}
+
+/// Asks for overwrite and removes the path from the system if requested, exits if not
+fn ask_for_overwrite(force: bool, system_path: &Path) {
+    if force
+        || bool_question(&format!(
+            "The path {} already exists, overwrite?",
+            system_path.display()
+        )) && bool_question("Are you sure?")
+    {
+        let result = if system_path.is_dir() {
+            fs::remove_dir_all(system_path)
+        } else {
+            fs::remove_file(system_path)
+        };
+        if let Err(e) = result {
+            if e.kind() == ErrorKind::PermissionDenied {
+                rerun_with_root("Removing path");
+            } else {
+                panic!("Error removing path: {e}");
+            }
+        }
+    } else {
+        exit(1)
+    }
 }
 
 /// Creates a symlink from `config_path` to `system_path`

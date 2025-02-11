@@ -2,10 +2,10 @@ use tokio::sync::{Notify, Semaphore};
 
 use crate::{
     config::CONFIG,
-    util::{get_hostname, rerun_with_root_args, system_path},
+    util::{config_path, get_hostname, paths_equal, rerun_with_root_args, system_path},
 };
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -13,7 +13,11 @@ use std::{
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
-pub fn list(rooted: bool) {
+pub fn list(rooted: bool, copy: Option<Vec<String>>) {
+    if let Some(items) = copy {
+        return list_copy(items);
+    }
+
     // Start the tokio runtime
     tokio::runtime::Builder::new_multi_thread()
         .build()
@@ -109,5 +113,18 @@ async fn process_dir(
     // Notify if we're the last operation
     if pending.fetch_sub(1, Ordering::AcqRel) == 1 {
         notify.notify_waiters();
+    }
+}
+
+fn list_copy(items: Vec<String>) {
+    for item in items {
+        let path = Path::new(&item);
+
+        let config_path = config_path(path);
+        let system_path = system_path(path);
+
+        if paths_equal(&config_path, system_path).is_err() {
+            println!("{item}");
+        }
     }
 }

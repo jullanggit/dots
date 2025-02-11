@@ -1,11 +1,12 @@
 use std::{
     env::{self, current_exe},
-    fs,
+    fs::{self, File},
+    io::{BufReader, Read as _},
     path::{Path, PathBuf},
-    process::{exit, Command},
+    process::{Command, exit},
 };
 
-use crate::{config::CONFIG, SILENT};
+use crate::{SILENT, config::CONFIG};
 
 /// The users home directory
 pub fn home() -> String {
@@ -102,4 +103,49 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
     config_path.push(cli_path);
 
     config_path
+}
+
+/// Checks if the config & system paths are already equal
+/// Does *not* currently support directories
+pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'static str> {
+    // Get metadatas
+    let system_metadata = fs::symlink_metadata(system_path).unwrap(); // TODO: handle permissionedenied
+    let config_metadata = fs::symlink_metadata(config_path).unwrap(); // TODO: handle permissionedenied
+
+    if system_metadata.file_type() != config_metadata.file_type() {
+        Err("Path already exists and differs in file type")
+    } else if system_metadata.len() != config_metadata.len() {
+        Err("Path already exists and differs in len")
+    } else if system_metadata.permissions() != config_metadata.permissions() {
+        Err("Path already exists and differs in permissions")
+    } else if system_metadata.file_type().is_symlink()
+    // TODO: handle PermissionDenied
+        && fs::read_link(system_path).unwrap() != fs::read_link(system_path).unwrap()
+    {
+        Err("Path already exists and differs in symlink destination")
+    } else if system_metadata.file_type().is_file() {
+        let system_file = File::open(system_path).unwrap(); // TODO: handle PermissionDenied
+        let config_file = File::open(config_path).unwrap(); // TODO: handle PermissionDenied
+
+        let mut system_reader = BufReader::new(system_file);
+        let mut config_reader = BufReader::new(config_file);
+
+        let mut system_buf = [0; 4096];
+        let mut config_buf = [0; 4096];
+
+        loop {
+            let system_read = system_reader.read(&mut system_buf).unwrap(); // TODO: handle PermissionDenied
+            let config_read = config_reader.read(&mut config_buf).unwrap(); // TODO: handle PermissionDenied
+
+            if system_read != config_read {
+                return Err("Path already exists and differs in content length");
+            } else if system_read == 0 {
+                return Ok(()); // EOF & identical
+            } else if system_buf[..system_read] != config_buf[..config_read] {
+                return Err("Path already exists and differs in file contents");
+            }
+        }
+    } else {
+        Ok(())
+    }
 }

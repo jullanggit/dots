@@ -30,6 +30,10 @@ enum Commands {
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
 
+        #[arg(long)]
+        /// Copy instead of symlink the path
+        copy: bool,
+
         #[arg(short, long)]
         /// Overwrite the destination without asking
         force: bool,
@@ -49,12 +53,19 @@ enum Commands {
         /// If the path is absolute, it is assumed to already be the path to remove
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
         path: PathBuf,
+
+        #[arg(long)]
+        /// Copy instead of symlink the path
+        copy: bool,
     },
     /// Outputs a list of all symlinks on the system that are probably made by dots
     List {
         #[arg(short, long)]
         /// Assume that the current user is root
         rooted: bool,
+
+        #[arg(long)]
+        copy: Option<Vec<String>>,
     },
 }
 
@@ -66,9 +77,9 @@ fn main() {
     SILENT.set(args.silent).expect("Failed to set SILENT");
 
     match args.command {
-        Commands::Add { path, force } => add::add(&path, force),
+        Commands::Add { path, force, copy } => add::add(&path, force, copy),
         Commands::Remove { path } => remove::remove(&path),
-        Commands::Import { path } => import::import(&path),
-        Commands::List { rooted } => list::list(rooted),
+        Commands::Import { path, copy } => import::import(&path, copy),
+        Commands::List { rooted, copy } => list::list(rooted, copy),
     }
 }
