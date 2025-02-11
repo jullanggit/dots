@@ -22,6 +22,10 @@ All paths are in the format described above.
 - import:  Import the given path from the system
 - list:    Outputs a list of all symlinks on the system that are probably made by dots
 
+All commands (except remove, which doesn't care) can also take --copy as an argument for copying, instead of symlinking the file. This is meant for things that for some reason or another do not like being a symlink.
+
+Note that paths added using --copy will not be detected by list, instead a list of items that should be on the system should be passed, which are then validated. Only paths that actually are on the system are printed back out.
+
 ### Import
 - Copies the given path from the system into the config, and replaces the system path with a symlink the the config path
 
