@@ -4,3 +4,4 @@
 - Add check-coverage for checking how much of the files in the files_dir are actually symlinked
 - Support dirs with --copy
 - Better error handling/reporting
+- Make parallel / single threaded list a feature flag
