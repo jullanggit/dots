@@ -1,6 +1,7 @@
 #![feature(let_chains)]
 
 mod add;
+mod check_coverage;
 mod config;
 mod import;
 mod list;
@@ -67,6 +68,8 @@ enum Commands {
         #[arg(long, trailing_var_arg = true, num_args(1..))]
         copy: Option<Vec<String>>,
     },
+    /// Checks the coverage of the files/ dir, by printing out all paths that are not symlinked into the system
+    CheckCoverage,
 }
 
 static SILENT: OnceLock<bool> = OnceLock::new();
@@ -81,5 +84,6 @@ fn main() {
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path, copy } => import::import(&path, copy),
         Commands::List { rooted, copy } => list::list(rooted, copy),
+        Commands::CheckCoverage => check_coverage::check_coverage(),
     }
 }
