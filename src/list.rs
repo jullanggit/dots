@@ -40,10 +40,13 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
         for _ in 0..threads {
             scope.spawn(|| {
                 loop {
+                    // Get read_dir, dont hold lock
                     let read_dir = read_dirs.lock().unwrap().pop();
                     match read_dir {
                         Some(read_dir) => {
+                            // Add ourselves to pending
                             pending.fetch_add(1, Ordering::AcqRel);
+
                             // Ignore errors with .flatten()
                             for dir_entry in read_dir.flatten() {
                                 // Get the file type
@@ -81,8 +84,11 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                                     read_dirs.lock().unwrap().push(read_dir);
                                 }
                             }
+
+                            // Remove ourselves from pending
                             pending.fetch_sub(1, Ordering::AcqRel);
                         }
+                        // If there are no read_dirs and nothing is pending, break
                         None => {
                             let pending = pending.load(Ordering::Acquire);
                             if pending == 0 {
