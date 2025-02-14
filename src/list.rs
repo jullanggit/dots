@@ -1,5 +1,3 @@
-use tokio::sync::{Notify, Semaphore};
-
 use crate::{
     config::CONFIG,
     util::{
@@ -8,12 +6,11 @@ use crate::{
     },
 };
 use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
+    fs::{self},
+    path::Path,
+    sync::Mutex,
+    thread,
+    time::Duration,
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
@@ -22,102 +19,66 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
         return list_copy(items);
     }
 
-    // Start the tokio runtime
-    tokio::runtime::Builder::new_multi_thread()
-        .build()
-        .unwrap()
-        .block_on(async {
-            // Rerun with root if required
-            if CONFIG.root && !rooted {
-                rerun_with_root_args(&["--rooted"]);
+    // Rerun with root if required
+    if CONFIG.root && !rooted {
+        rerun_with_root_args(&["--rooted"]);
+    }
+
+    let read_dirs = Mutex::new(Vec::from_iter(
+        CONFIG
+            .list_paths
+            .iter()
+            .map(|path| fs::read_dir(path).expect("Failed to read dir")),
+    ));
+
+    thread::scope(|scope| {
+        loop {
+            let read_dir = read_dirs.lock().unwrap().pop();
+            match read_dir {
+                Some(read_dir) => {
+                    // Ignore errors with .flatten()
+                    for dir_entry in read_dir.flatten() {
+                        // Get the file type
+                        let file_type = dir_entry.file_type().unwrap();
+
+                        if file_type.is_symlink() {
+                            // get the entries target
+                            let target =
+                                fs::read_link(dir_entry.path()).expect("Failed to get target");
+                            // If the target is in the files/ dir...
+                            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+                            // ...and was plausibly created by dots...
+                            && system_path(stripped) == dir_entry.path()
+                            {
+                                // Convert to a string, so strip_prefix() doesnt remove leading slashes
+                                let str = stripped.to_str().expect("Item should be valid UTF-8");
+
+                                let formatted = str
+                                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                                    .map(Into::into)
+                                    // If the subdir is the current hostname, replace it with {hostname}
+                                    .or(str
+                                        .strip_prefix(&get_hostname())
+                                        .map(|str| format!("{{hostname}}{str}")))
+                                    .unwrap_or(str.into());
+
+                                println!("{formatted}");
+                            }
+                        } else if file_type.is_dir() {
+                            let path = dir_entry.path();
+
+                            // Recurse into the dir
+                            scope.spawn(|| {
+                                let read_dir = fs::read_dir(path).expect("Failed to read dir");
+                                read_dirs.lock().unwrap().push(read_dir);
+                            });
+                        }
+                    }
+                }
+                None => thread::sleep(Duration::from_millis(20)),
             }
-
-            // The amount of currently pending operations
-            let pending = Arc::new(AtomicUsize::new(0));
-            // The notification when no operations are pending anymore
-            let notify = Arc::new(Notify::new());
-
-            // Represents the max number of concurrently open fd's
-            let sem = Arc::new(Semaphore::new(900));
-
-            // Add initial paths
-            for path in &CONFIG.list_paths {
-                // Increment the number of pending operations
-                pending.fetch_add(1, Ordering::AcqRel);
-
-                tokio::spawn(process_dir(
-                    path.into(),
-                    pending.clone(),
-                    notify.clone(),
-                    sem.clone(),
-                ));
-            }
-
-            // Wait for all operations to complete
-            notify.notified().await;
-        });
-}
-
-// Recursively processes the given path, printing found items to stdout
-async fn process_dir(
-    path: PathBuf,
-    pending: Arc<AtomicUsize>,
-    notify: Arc<Notify>,
-    sem: Arc<Semaphore>,
-) {
-    // Avoid hitting the fd limit.
-    // Is dropped at the end of the scope
-    let _permit = sem.acquire().await.unwrap();
-
-    // Iterate over dir entries
-    let mut read_dir = tokio::fs::read_dir(path).await.unwrap();
-    while let Some(dir_entry) = read_dir.next_entry().await.unwrap() {
-        // Get the file type
-        let file_type = dir_entry.file_type().await.unwrap();
-
-        if file_type.is_symlink() {
-            // get the entries target
-            let target = tokio::fs::read_link(dir_entry.path())
-                .await
-                .expect("Failed to get target");
-            // If the target is in the files/ dir...
-            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                // ...and was plausibly created by dots...
-                && system_path(stripped) == dir_entry.path()
-            {
-                // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                let str = stripped.to_str().expect("Item should be valid UTF-8");
-
-                let formatted = str
-                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                    .map(Into::into)
-                    // If the subdir is the current hostname, replace it with {hostname}
-                    .or(str
-                        .strip_prefix(&get_hostname())
-                        .map(|str| format!("{{hostname}}{str}")))
-                    .unwrap_or(str.into());
-
-                println!("{formatted}");
-            }
-        } else if file_type.is_dir() {
-            // Increment the number of pending operations
-            pending.fetch_add(1, Ordering::Release);
-
-            // Recurse into the dir
-            tokio::spawn(process_dir(
-                dir_entry.path(),
-                pending.clone(),
-                notify.clone(),
-                sem.clone(),
-            ));
         }
-    }
-
-    // Decrement the number of pending operations
-    // Notify if we're the last operation
-    if pending.fetch_sub(1, Ordering::AcqRel) == 1 {
-        notify.notify_waiters();
-    }
+    });
 }
 
 fn list_copy(items: Vec<String>) {
