@@ -8,9 +8,11 @@ use crate::{
 use std::{
     fs::{self},
     path::Path,
-    sync::Mutex,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread,
-    time::Duration,
 };
 
 /// Prints all symlinks on the system, that are probably made by dots
@@ -31,52 +33,64 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
             .map(|path| fs::read_dir(path).expect("Failed to read dir")),
     ));
 
-    thread::scope(|scope| {
-        loop {
-            let read_dir = read_dirs.lock().unwrap().pop();
-            match read_dir {
-                Some(read_dir) => {
-                    // Ignore errors with .flatten()
-                    for dir_entry in read_dir.flatten() {
-                        // Get the file type
-                        let file_type = dir_entry.file_type().unwrap();
+    let pending = AtomicUsize::new(0);
 
-                        if file_type.is_symlink() {
-                            // get the entries target
-                            let target =
-                                fs::read_link(dir_entry.path()).expect("Failed to get target");
-                            // If the target is in the files/ dir...
-                            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+    thread::scope(|scope| {
+        for _ in 0..100 {
+            scope.spawn(|| {
+                loop {
+                    let read_dir = read_dirs.lock().unwrap().pop();
+                    match read_dir {
+                        Some(read_dir) => {
+                            pending.fetch_add(1, Ordering::AcqRel);
+                            // Ignore errors with .flatten()
+                            for dir_entry in read_dir.flatten() {
+                                // Get the file type
+                                let file_type = dir_entry.file_type().unwrap();
+
+                                if file_type.is_symlink() {
+                                    // get the entries target
+                                    let target = fs::read_link(dir_entry.path())
+                                        .expect("Failed to get target");
+                                    // If the target is in the files/ dir...
+                                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
                             // ...and was plausibly created by dots...
                             && system_path(stripped) == dir_entry.path()
-                            {
-                                // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                                let str = stripped.to_str().expect("Item should be valid UTF-8");
+                                    {
+                                        // Convert to a string, so strip_prefix() doesnt remove leading slashes
+                                        let str =
+                                            stripped.to_str().expect("Item should be valid UTF-8");
 
-                                let formatted = str
-                                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                                    .map(Into::into)
-                                    // If the subdir is the current hostname, replace it with {hostname}
-                                    .or(str
-                                        .strip_prefix(&get_hostname())
-                                        .map(|str| format!("{{hostname}}{str}")))
-                                    .unwrap_or(str.into());
+                                        let formatted = str
+                                            .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                                            .map(Into::into)
+                                            // If the subdir is the current hostname, replace it with {hostname}
+                                            .or(str
+                                                .strip_prefix(&get_hostname())
+                                                .map(|str| format!("{{hostname}}{str}")))
+                                            .unwrap_or(str.into());
 
-                                println!("{formatted}");
+                                        println!("{formatted}");
+                                    }
+                                } else if file_type.is_dir() {
+                                    let path = dir_entry.path();
+
+                                    // Recurse into the dir
+                                    let read_dir = fs::read_dir(path).expect("Failed to read dir");
+                                    read_dirs.lock().unwrap().push(read_dir);
+                                }
                             }
-                        } else if file_type.is_dir() {
-                            let path = dir_entry.path();
-
-                            // Recurse into the dir
-                            scope.spawn(|| {
-                                let read_dir = fs::read_dir(path).expect("Failed to read dir");
-                                read_dirs.lock().unwrap().push(read_dir);
-                            });
+                            pending.fetch_sub(1, Ordering::AcqRel);
+                        }
+                        None => {
+                            let pending = pending.load(Ordering::Acquire);
+                            if pending == 0 {
+                                break;
+                            }
                         }
                     }
                 }
-                None => thread::sleep(Duration::from_millis(20)),
-            }
+            });
         }
     });
 }
