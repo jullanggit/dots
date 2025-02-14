@@ -36,7 +36,8 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
     let pending = AtomicUsize::new(0);
 
     thread::scope(|scope| {
-        for _ in 0..100 {
+        let threads = thread::available_parallelism().map_or(12, Into::into);
+        for _ in 0..threads {
             scope.spawn(|| {
                 loop {
                     let read_dir = read_dirs.lock().unwrap().pop();
@@ -54,8 +55,8 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                                         .expect("Failed to get target");
                                     // If the target is in the files/ dir...
                                     if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                            // ...and was plausibly created by dots...
-                            && system_path(stripped) == dir_entry.path()
+                                        // ...and was plausibly created by dots...
+                                        && system_path(stripped) == dir_entry.path()
                                     {
                                         // Convert to a string, so strip_prefix() doesnt remove leading slashes
                                         let str =
