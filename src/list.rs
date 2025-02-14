@@ -26,12 +26,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
         rerun_with_root_args(&["--rooted"]);
     }
 
-    let read_dirs = Mutex::new(Vec::from_iter(
-        CONFIG
-            .list_paths
-            .iter()
-            .map(|path| fs::read_dir(path).expect("Failed to read dir")),
-    ));
+    let pending_paths = Mutex::new(Vec::from_iter(CONFIG.list_paths.iter().map(Into::into)));
 
     let pending = AtomicUsize::new(0);
 
@@ -41,14 +36,15 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
             scope.spawn(|| {
                 loop {
                     // Get read_dir, dont hold lock
-                    let read_dir = read_dirs.lock().unwrap().pop();
-                    match read_dir {
-                        Some(read_dir) => {
+                    let option_path = pending_paths.lock().unwrap().pop();
+
+                    match option_path {
+                        Some(path) => {
                             // Add ourselves to pending
                             pending.fetch_add(1, Ordering::AcqRel);
 
                             // Ignore errors with .flatten()
-                            for dir_entry in read_dir.flatten() {
+                            for dir_entry in fs::read_dir(path).unwrap().flatten() {
                                 // Get the file type
                                 let file_type = dir_entry.file_type().unwrap();
 
@@ -80,8 +76,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                                     let path = dir_entry.path();
 
                                     // Recurse into the dir
-                                    let read_dir = fs::read_dir(path).expect("Failed to read dir");
-                                    read_dirs.lock().unwrap().push(read_dir);
+                                    pending_paths.lock().unwrap().push(path);
                                 }
                             }
 
