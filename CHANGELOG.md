@@ -2,15 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.1.2
 
 ### CHANGELOG
 
 - initial changelog
 
+### Other
+
+- Release atem-dots version 0.1.1
+
+### README
+
+- update installing section
+
+### TODO
+
+- remove 'parallel list feature flag'
+
+- add 'parallel list feature flag'
+
+### cargo-release
+
+- add release.toml
+
 ### git-cliff
 
 - add cliff.toml
+
+### list
+
+- dont unnecessarily hold dir fd's
+
+- use as many threads as cores
+
+- thread::spawn() for every read_dir -> thread pool
+
+- tokio -> manual thread::spawn for read_dir()
 
 ## 0.1.0
 
