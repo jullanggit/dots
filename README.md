@@ -47,7 +47,7 @@ Note that paths added using --copy will not be detected by list, instead a list 
   - True if specified, false otherwise
 
 ## Installing
-`RUSTFLAGS=-Znext-solver cargo +nightly install --git https://github.com/jullanggit/dots dots`
+`cargo +nightly install atem-dots`
 
 ## Usage
 - This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me.
