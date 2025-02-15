@@ -18,3 +18,4 @@ path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4.5.11", features = ["derive"] }
+crossbeam-queue = "0.3.12"

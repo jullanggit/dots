@@ -1,3 +1,5 @@
+use crossbeam_queue::SegQueue;
+
 use crate::{
     config::CONFIG,
     util::{
@@ -8,10 +10,7 @@ use crate::{
 use std::{
     fs::{self},
     path::Path,
-    sync::{
-        Mutex,
-        atomic::{AtomicUsize, Ordering},
-    },
+    sync::atomic::{AtomicUsize, Ordering},
     thread,
 };
 
@@ -26,7 +25,10 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
         rerun_with_root_args(&["--rooted"]);
     }
 
-    let pending_paths = Mutex::new(Vec::from_iter(CONFIG.list_paths.iter().map(Into::into)));
+    let pending_paths = SegQueue::new();
+    for path in &CONFIG.list_paths {
+        pending_paths.push(path.into());
+    }
 
     let pending = AtomicUsize::new(0);
 
@@ -36,7 +38,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
             scope.spawn(|| {
                 loop {
                     // Get read_dir, dont hold lock
-                    let option_path = pending_paths.lock().unwrap().pop();
+                    let option_path = pending_paths.pop();
 
                     match option_path {
                         Some(path) => {
@@ -76,7 +78,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                                     let path = dir_entry.path();
 
                                     // Recurse into the dir
-                                    pending_paths.lock().unwrap().push(path);
+                                    pending_paths.push(path);
                                 }
                             }
 
