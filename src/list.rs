@@ -7,7 +7,8 @@ use crate::{
 };
 use std::{
     fs::{self},
-    path::Path,
+    iter,
+    path::{Path, PathBuf},
     sync::{
         Mutex,
         atomic::{AtomicUsize, Ordering},
@@ -26,68 +27,84 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
         rerun_with_root_args(&["--rooted"]);
     }
 
-    let pending_paths = Mutex::new(Vec::from_iter(CONFIG.list_paths.iter().map(Into::into)));
+    let threads = thread::available_parallelism().map_or(12, Into::into);
+
+    // Set up pending paths
+    // Each thread has its own vec, to which it will push new paths
+    // If a thread's own vec is empty, it will try to get items from another thread's vec
+    // We keep an external atomic len for each vec, so the threads dont have to lock the mutex to see if there are any elements
+    let pending_paths = Vec::from_iter(
+        iter::repeat_with(|| (Mutex::new(Vec::new()), AtomicUsize::new(0))).take(threads),
+    );
+    for (index, path) in CONFIG.list_paths.iter().enumerate() {
+        let (vec, len) = &pending_paths[index];
+
+        // Unwrap is fine, because were still single-threaded, so the lock can't be poisoned
+        vec.lock().unwrap().push(path.into());
+
+        len.fetch_add(1, Ordering::Relaxed);
+    }
 
     let pending = AtomicUsize::new(0);
 
+    // The borrow checker wont let us just capture i in 'for _ in ...', so we have to do this
+    let index = AtomicUsize::new(0);
+
     thread::scope(|scope| {
-        let threads = thread::available_parallelism().map_or(12, Into::into);
         for _ in 0..threads {
             scope.spawn(|| {
-                loop {
-                    // Get read_dir, dont hold lock
-                    let option_path = pending_paths.lock().unwrap().pop();
+                let thread_index = index.fetch_add(1, Ordering::Relaxed);
 
-                    match option_path {
+                'outer: loop {
+                    // Try getting an element from the current thread's vec
+                    let current_option_path = pending_paths[thread_index].0.lock().unwrap().pop();
+
+                    match current_option_path {
                         Some(path) => {
-                            // Add ourselves to pending
-                            pending.fetch_add(1, Ordering::AcqRel);
+                            // We successfully popped -> decrement the len
+                            pending_paths[thread_index].1.fetch_sub(1, Ordering::AcqRel);
 
-                            // Ignore errors with .flatten()
-                            for dir_entry in fs::read_dir(path).unwrap().flatten() {
-                                // Get the file type
-                                let file_type = dir_entry.file_type().unwrap();
-
-                                if file_type.is_symlink() {
-                                    // get the entries target
-                                    let target = fs::read_link(dir_entry.path())
-                                        .expect("Failed to get target");
-                                    // If the target is in the files/ dir...
-                                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
-                                        // ...and was plausibly created by dots...
-                                        && system_path(stripped) == dir_entry.path()
-                                    {
-                                        // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                                        let str =
-                                            stripped.to_str().expect("Item should be valid UTF-8");
-
-                                        let formatted = str
-                                            .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                                            .map(Into::into)
-                                            // If the subdir is the current hostname, replace it with {hostname}
-                                            .or(str
-                                                .strip_prefix(&get_hostname())
-                                                .map(|str| format!("{{hostname}}{str}")))
-                                            .unwrap_or(str.into());
-
-                                        println!("{formatted}");
-                                    }
-                                } else if file_type.is_dir() {
-                                    let path = dir_entry.path();
-
-                                    // Recurse into the dir
-                                    pending_paths.lock().unwrap().push(path);
-                                }
-                            }
-
-                            // Remove ourselves from pending
-                            pending.fetch_sub(1, Ordering::AcqRel);
+                            process_path(&pending_paths, &pending, thread_index, &path);
                         }
-                        // If there are no read_dirs and nothing is pending, break
                         None => {
-                            let pending = pending.load(Ordering::Acquire);
-                            if pending == 0 {
-                                break;
+                            // Try getting one from another thread
+                            loop {
+                                let mut paths_left = false;
+
+                                for other_index in 0..threads {
+                                    // Skip checking ourselves
+                                    if other_index == thread_index {
+                                        continue;
+                                    }
+
+                                    // If the other thread's vec isnt empty
+                                    if pending_paths[other_index].1.load(Ordering::Acquire) != 0 {
+                                        paths_left = true;
+
+                                        let other_option_path =
+                                            pending_paths[other_index].0.lock().unwrap().pop();
+
+                                        if let Some(path) = other_option_path {
+                                            // We successfully popped -> decrement the len
+                                            pending_paths[other_index]
+                                                .1
+                                                .fetch_sub(1, Ordering::AcqRel);
+
+                                            process_path(
+                                                &pending_paths,
+                                                &pending,
+                                                thread_index,
+                                                &path,
+                                            );
+                                            break;
+                                        }
+                                    }
+                                }
+
+                                let pending = pending.load(Ordering::Acquire);
+                                if pending == 0 && !paths_left {
+                                    break 'outer;
+                                }
                             }
                         }
                     }
@@ -95,6 +112,56 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
             });
         }
     });
+}
+
+fn process_path(
+    pending_paths: &[(Mutex<Vec<PathBuf>>, AtomicUsize)],
+    pending: &AtomicUsize,
+    thread_index: usize,
+    path: &Path,
+) {
+    // Add ourselves to pending
+    pending.fetch_add(1, Ordering::AcqRel);
+
+    // Ignore errors with .flatten()
+    for dir_entry in fs::read_dir(path).unwrap().flatten() {
+        // Get the file type
+        let file_type = dir_entry.file_type().unwrap();
+
+        if file_type.is_symlink() {
+            // get the entries target
+            let target = fs::read_link(dir_entry.path()).expect("Failed to get target");
+            // If the target is in the files/ dir...
+            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+                // ...and was plausibly created by dots...
+                && system_path(stripped) == dir_entry.path()
+            {
+                // Convert to a string, so strip_prefix() doesnt remove leading slashes
+                let str = stripped.to_str().expect("Item should be valid UTF-8");
+
+                let formatted = str
+                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                    .map(Into::into)
+                    // If the subdir is the current hostname, replace it with {hostname}
+                    .or(str
+                        .strip_prefix(&get_hostname())
+                        .map(|str| format!("{{hostname}}{str}")))
+                    .unwrap_or(str.into());
+
+                println!("{formatted}");
+            }
+        } else if file_type.is_dir() {
+            let path = dir_entry.path();
+
+            // Recurse into the dir
+            let (vec, len) = &pending_paths[thread_index];
+            vec.lock().unwrap().push(path);
+            len.fetch_add(1, Ordering::AcqRel);
+        }
+    }
+
+    // Remove ourselves from pending
+    pending.fetch_sub(1, Ordering::AcqRel);
 }
 
 fn list_copy(items: Vec<String>) {
