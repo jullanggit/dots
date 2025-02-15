@@ -33,11 +33,19 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
     // Each thread has its own vec, to which it will push new paths
     // If a thread's own vec is empty, it will try to get items from another thread's vec
     // We keep an external atomic len for each vec, so the threads dont have to lock the mutex to see if there are any elements
+    // Additionally we keep a waiting field, so that not all of the threads wait for the first available one
     let pending_paths = Vec::from_iter(
-        iter::repeat_with(|| (Mutex::new(Vec::new()), AtomicUsize::new(0))).take(threads),
+        iter::repeat_with(|| {
+            (
+                Mutex::new(Vec::new()),
+                AtomicUsize::new(0),
+                AtomicUsize::new(0),
+            )
+        })
+        .take(threads),
     );
     for (index, path) in CONFIG.list_paths.iter().enumerate() {
-        let (vec, len) = &pending_paths[index];
+        let (vec, len, _waiting) = &pending_paths[index];
 
         // Unwrap is fine, because were still single-threaded, so the lock can't be poisoned
         vec.lock().unwrap().push(path.into());
@@ -71,33 +79,54 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                             loop {
                                 let mut paths_left = false;
 
-                                for other_index in 0..threads {
+                                let mut to_process = None;
+
+                                // The vecs that could be waited for
+                                let mut possible = Vec::new();
+
+                                for (other_index, (_vec, len, waiting)) in
+                                    pending_paths.iter().enumerate()
+                                {
                                     // Skip checking ourselves
                                     if other_index == thread_index {
                                         continue;
                                     }
 
                                     // If the other thread's vec isnt empty
-                                    if pending_paths[other_index].1.load(Ordering::Acquire) != 0 {
+                                    if len.load(Ordering::Acquire) != 0 {
                                         paths_left = true;
 
-                                        let other_option_path =
-                                            pending_paths[other_index].0.lock().unwrap().pop();
+                                        let waiting = waiting.load(Ordering::Acquire);
 
-                                        if let Some(path) = other_option_path {
-                                            // We successfully popped -> decrement the len
-                                            pending_paths[other_index]
-                                                .1
-                                                .fetch_sub(1, Ordering::AcqRel);
-
-                                            process_path(
-                                                &pending_paths,
-                                                &pending,
-                                                thread_index,
-                                                &path,
-                                            );
+                                        if waiting == 0 {
+                                            to_process = Some(other_index);
                                             break;
+                                        } else {
+                                            possible.push((other_index, waiting));
                                         }
+                                    }
+                                }
+
+                                if to_process.is_none() {
+                                    to_process = possible
+                                        .iter()
+                                        .min_by_key(|(_thread, waiting)| waiting)
+                                        .map(|(thread, _waiting)| *thread);
+                                }
+
+                                if let Some(other_index) = to_process {
+                                    let (vec, len, waiting) = &pending_paths[other_index];
+
+                                    waiting.fetch_add(1, Ordering::AcqRel);
+                                    let other_option_path = vec.lock().unwrap().pop();
+                                    waiting.fetch_sub(1, Ordering::AcqRel);
+
+                                    if let Some(path) = other_option_path {
+                                        // We successfully popped -> decrement the len
+                                        len.fetch_sub(1, Ordering::AcqRel);
+
+                                        process_path(&pending_paths, &pending, thread_index, &path);
+                                        break;
                                     }
                                 }
 
@@ -115,7 +144,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
 }
 
 fn process_path(
-    pending_paths: &[(Mutex<Vec<PathBuf>>, AtomicUsize)],
+    pending_paths: &[(Mutex<Vec<PathBuf>>, AtomicUsize, AtomicUsize)],
     pending: &AtomicUsize,
     thread_index: usize,
     path: &Path,
@@ -154,7 +183,7 @@ fn process_path(
             let path = dir_entry.path();
 
             // Recurse into the dir
-            let (vec, len) = &pending_paths[thread_index];
+            let (vec, len, _waiting) = &pending_paths[thread_index];
             vec.lock().unwrap().push(path);
             len.fetch_add(1, Ordering::AcqRel);
         }
