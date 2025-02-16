@@ -18,23 +18,23 @@ use std::{
 
 #[derive(Default)]
 struct PendingPaths {
-    vec: Mutex<Vec<PathBuf>>,
-    /// the len of vec
+    queue: Mutex<Vec<PathBuf>>,
+    /// the len of the queue
     len: AtomicUsize,
-    /// the amount of threads currently waiting to lock vec
+    /// the amount of threads currently waiting to lock the queue
     waiting: AtomicUsize,
 }
 impl PendingPaths {
-    /// Pop from the vec
+    /// Push to the queue.
     /// Note that this may block the current thread
     fn push(&self, value: PathBuf) {
-        self.vec.lock().unwrap().push(value);
+        self.queue.lock().unwrap().push(value);
         self.len.fetch_add(1, Ordering::AcqRel);
     }
-    /// Pop from the vec
+    /// Pop from the queue.
     /// Note that this may block the current thread
     fn pop(&self) -> Option<PathBuf> {
-        if let Some(popped) = self.vec.lock().unwrap().pop() {
+        if let Some(popped) = self.queue.lock().unwrap().pop() {
             // successful pop -> decrement self.len
             self.len.fetch_sub(1, Ordering::AcqRel);
             Some(popped)
@@ -87,96 +87,77 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
     thread::scope(|scope| {
         for _ in 0..threads {
             scope.spawn(|| {
-                let thread_index = index.fetch_add(1, Ordering::Relaxed);
+                let my_index = index.fetch_add(1, Ordering::Relaxed); // We dont care about ordering
 
-                'process_paths: loop {
-                    // Try getting an element from the current thread's vec
-                    let current_option_path = pending_paths[thread_index].pop();
-
-                    match current_option_path {
-                        Some(path) => {
-                            process_path(&pending_paths, &pending, thread_index, &path);
-                        }
-                        None => {
-                            // Try getting one from another thread
-                            'find_path_to_process: loop {
-                                // (thread, wait)
-                                let mut with_wait: Option<Vec<(usize, usize)>> = None;
-
-                                let mut no_wait: Option<usize> = None;
-
-                                // For all other threads
-                                for (other_index, other_pending_paths) in
-                                    pending_paths.iter().enumerate()
-                                {
-                                    // Skip checking ourselves
-                                    if other_index == thread_index {
-                                        continue;
-                                    }
-
-                                    // If the other thread's vec has items
-                                    if other_pending_paths.len() != 0 {
-                                        let waiting = other_pending_paths.waiting();
-
-                                        // If no one is currently waiting
-                                        if waiting == 0 {
-                                            no_wait = Some(other_index);
-                                            break;
-                                        // If someone is waiting
-                                        } else {
-                                            // Add to with_wait
-                                            with_wait
-                                                .get_or_insert_default()
-                                                .push((other_index, waiting));
-                                        }
-                                    }
-                                }
-
-                                let to_process = match (no_wait, with_wait) {
-                                    // No wait
-                                    (Some(other_thread), _) => Some(other_thread),
-
-                                    // With wait, get the thread with the smallest waiting
-                                    (None, Some(possible_other_threads)) => Some(
-                                        possible_other_threads
-                                            .iter()
-                                            .min_by_key(|(_thread, waiting)| waiting)
-                                            .map(|(thread, _waiting)| *thread)
-                                            .expect("with_wait shouldn't be empty"),
-                                    ),
-
-                                    // No threads with items
-                                    (None, None) => None,
-                                };
-
-                                if let Some(other_index) = to_process {
-                                    let other_pending_paths = &pending_paths[other_index];
-
-                                    // start waiting -> pop -> stop waiting
-                                    other_pending_paths.start_waiting();
-
-                                    let other_option_path = other_pending_paths.pop();
-
-                                    other_pending_paths.stop_waiting();
-
-                                    if let Some(path) = other_option_path {
-                                        process_path(&pending_paths, &pending, thread_index, &path);
-                                        break 'find_path_to_process;
-                                    }
-                                }
-
-                                // If there are no pending paths and no paths are left, stop processing
-                                let pending = pending.load(Ordering::Acquire);
-                                if pending == 0 && to_process.is_none() {
-                                    break 'process_paths;
-                                }
-                            }
-                        }
+                loop {
+                    // Try our own queue
+                    if let Some(path) = pending_paths[my_index]
+                        .pop()
+                        // Or try stealing a path from another thread's queue
+                        .or_else(|| try_steal_path(&pending_paths, my_index))
+                    {
+                        process_path(&pending_paths, &pending, my_index, &path);
+                        continue;
                     }
+
+                    // If no work is left, break
+                    if pending.load(Ordering::Acquire) == 0 {
+                        break;
+                    }
+
+                    // Avoid busy-looping
+                    thread::yield_now();
                 }
             });
         }
     });
+}
+
+/// Try to steal a pending path from another thread.
+fn try_steal_path(pending_paths: &[PendingPaths], my_index: usize) -> Option<PathBuf> {
+    let mut candidate: Option<(usize, usize)> = None; // (thread_index, waiting)
+
+    // For all other threads
+    for (index, pending_paths) in pending_paths.iter().enumerate() {
+        // Skip ourselves
+        if index == my_index {
+            continue;
+        }
+
+        // If the other thread's queue has items
+        if pending_paths.len() > 0 {
+            let waiting = pending_paths.waiting();
+
+            let this_candidate = Some((index, waiting));
+
+            // If no one is currently waiting
+            if waiting == 0 {
+                // Immediately choose this thread
+                candidate = this_candidate;
+                break;
+            }
+
+            // Otherwise, choose the candidate with the smallest waiting count
+            candidate = match candidate {
+                None => this_candidate,
+                Some((_, current_waiting)) if waiting < current_waiting => this_candidate,
+                other => other,
+            };
+        }
+    }
+
+    if let Some((other_index, _)) = candidate {
+        let other_pending_paths = &pending_paths[other_index];
+
+        // start waiting -> pop -> stop waiting
+        other_pending_paths.start_waiting();
+        let stolen = other_pending_paths.pop();
+        other_pending_paths.stop_waiting();
+
+        stolen
+    } else {
+        None
+    }
 }
 
 fn process_path(
