@@ -2,7 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.1.3
+
+### Other
+
+- remove unneeded .cargo/config.toml
+
+### code
+#### list
+
+- improve work stealing and extract it into function
+
+- some readability improvements
+
+- extract len & waiting handeling into a struct
+
+### list
+
+- make threads choose the thread with the least waiting threads to steal work from
+
+- attempt to mitigate lock contention by manually sharding vecs
+
 ## 0.1.2
+
+### Other
+
+- Release
+
+### README
+
+- update installing section
+
+### cargo-release
+
+- add release.toml
+
+## 0.1.1
 
 ### CHANGELOG
 
@@ -12,19 +47,11 @@ All notable changes to this project will be documented in this file.
 
 - Release atem-dots version 0.1.1
 
-### README
-
-- update installing section
-
 ### TODO
 
 - remove 'parallel list feature flag'
 
 - add 'parallel list feature flag'
-
-### cargo-release
-
-- add release.toml
 
 ### git-cliff
 
