@@ -100,13 +100,12 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                         None => {
                             // Try getting one from another thread
                             'find_path_to_process: loop {
-                                let mut paths_left = false;
+                                // (thread, wait)
+                                let mut with_wait: Option<Vec<(usize, usize)>> = None;
 
-                                let mut to_process = None;
+                                let mut no_wait: Option<usize> = None;
 
-                                // The vecs that could be waited for
-                                let mut possible = Vec::new();
-
+                                // For all other threads
                                 for (other_index, other_pending_paths) in
                                     pending_paths.iter().enumerate()
                                 {
@@ -115,40 +114,51 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                                         continue;
                                     }
 
-                                    // If the other thread's vec isnt empty
+                                    // If the other thread's vec has items
                                     if other_pending_paths.len() != 0 {
-                                        paths_left = true;
-
                                         let waiting = other_pending_paths.waiting();
 
-                                        // If no-one is currently waiting, mark the index for processing and break
+                                        // If no one is currently waiting
                                         if waiting == 0 {
-                                            to_process = Some(other_index);
+                                            no_wait = Some(other_index);
                                             break;
+                                        // If someone is waiting
                                         } else {
-                                            possible.push((other_index, waiting));
+                                            // Add to with_wait
+                                            with_wait
+                                                .get_or_insert_default()
+                                                .push((other_index, waiting));
                                         }
                                     }
                                 }
 
-                                // If there isnt anything to immediately process, get the thread with the smallest waiting
-                                if to_process.is_none() {
-                                    to_process = possible
-                                        .iter()
-                                        .min_by_key(|(_thread, waiting)| waiting)
-                                        .map(|(thread, _waiting)| *thread);
-                                }
+                                let to_process = match (no_wait, with_wait) {
+                                    // No wait
+                                    (Some(other_thread), _) => Some(other_thread),
+
+                                    // With wait, get the thread with the smallest waiting
+                                    (None, Some(possible_other_threads)) => Some(
+                                        possible_other_threads
+                                            .iter()
+                                            .min_by_key(|(_thread, waiting)| waiting)
+                                            .map(|(thread, _waiting)| *thread)
+                                            .expect("with_wait shouldn't be empty"),
+                                    ),
+
+                                    // No threads with items
+                                    (None, None) => None,
+                                };
 
                                 if let Some(other_index) = to_process {
                                     let other_pending_paths = &pending_paths[other_index];
 
+                                    // start waiting -> pop -> stop waiting
                                     other_pending_paths.start_waiting();
 
                                     let other_option_path = other_pending_paths.pop();
 
                                     other_pending_paths.stop_waiting();
 
-                                    // We found something to process
                                     if let Some(path) = other_option_path {
                                         process_path(&pending_paths, &pending, thread_index, &path);
                                         break 'find_path_to_process;
@@ -157,7 +167,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
 
                                 // If there are no pending paths and no paths are left, stop processing
                                 let pending = pending.load(Ordering::Acquire);
-                                if pending == 0 && !paths_left {
+                                if pending == 0 && to_process.is_none() {
                                     break 'process_paths;
                                 }
                             }
