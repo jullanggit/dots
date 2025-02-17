@@ -2,6 +2,7 @@
 
 mod add;
 mod config;
+mod debug;
 mod import;
 mod list;
 mod remove;
@@ -70,6 +71,21 @@ enum Commands {
         #[arg(long, trailing_var_arg = true, num_args(1..))]
         copy: Option<Vec<String>>,
     },
+    /// Debugging commands
+    #[command(subcommand)]
+    Debug(DebugCommands),
+}
+
+#[derive(Subcommand, Debug)]
+enum DebugCommands {
+    /// Print the config path of the given path
+    ConfigPath {
+        /// Format: (sub-dir of ~/.config/rebos/files}/{path to symlink)
+        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>
+        /// "{hostname}" can be used as a placeholder for the actual hostname of the system
+        /// "{home}" can be used as a placeholder for the home dir of the user
+        path: PathBuf,
+    },
 }
 
 static SILENT: OnceLock<bool> = OnceLock::new();
@@ -84,5 +100,6 @@ fn main() {
         Commands::Remove { path } => remove::remove(&path),
         Commands::Import { path, copy } => import::import(&path, copy),
         Commands::List { rooted, copy } => list::list(rooted, copy),
+        Commands::Debug(debug_command) => debug::debug(debug_command),
     }
 }
