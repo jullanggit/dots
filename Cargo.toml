@@ -9,7 +9,7 @@ authors = ["Jul Lang <jullanggit@proton.me>"]
 repository = "https://github.com/jullanggit/dots"
 readme = "README.md"
 license = "MIT"
-categories = ["command-line-utilities", "config"]
+categories = ["command-line-utilities", "filesystem"]
 keywords = ["dotfiles"]
 
 [[bin]]
