@@ -2,12 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.2
+
+### Feature
+#### debug
+
+- add system-path
+
+### fix
+#### system_path
+
+- Replace "{home}" with the users home dir
+
 ## 0.2.1
 
 ### Cargo.toml
 #### categories
 
 - config -> filesystem
+
+### Other
+
+- Release
 
 ## 0.2.0
 
