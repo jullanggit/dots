@@ -86,6 +86,14 @@ enum DebugCommands {
         /// "{home}" can be used as a placeholder for the home dir of the user.
         path: PathBuf,
     },
+    /// Print the system path of the given path
+    SystemPath {
+        /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
+        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>.
+        /// "{hostname}" can be used as a placeholder for the actual hostname of the system.
+        /// "{home}" can be used as a placeholder for the home dir of the user.
+        path: PathBuf,
+    },
 }
 
 static SILENT: OnceLock<bool> = OnceLock::new();
