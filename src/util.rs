@@ -62,15 +62,20 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
 }
 
 /// Converts the path relative to files/ to the location on the actual system. (by trimming the subdir of files/ away)
-pub fn system_path(path: &Path) -> &Path {
-    if path.is_relative() {
-        let str = path.as_os_str().to_str().unwrap();
+pub fn system_path(path: &Path) -> PathBuf {
+    let str = path.as_os_str().to_str().unwrap();
 
+    // Replace {home} with the users home dir
+    let resolved_home = str.replace("{home}", &home()[1..]);
+
+    if path.is_relative() {
         // Only keep the path from the first /
-        Path::new(&str[str.find('/').unwrap()..])
+        let absolute = &resolved_home[str.find('/').unwrap()..];
+
+        absolute.into()
     } else {
         // The default subdir was elided, so the path is already the correct one
-        path
+        resolved_home.into()
     }
 }
 

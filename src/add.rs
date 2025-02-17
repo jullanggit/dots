@@ -20,16 +20,16 @@ pub fn add(path: &Path, force: bool, copy: bool) {
     let system_path = system_path(path);
 
     // If the path already exists
-    if symlink_metadata(system_path).is_ok() {
+    if symlink_metadata(&system_path).is_ok() {
         // Check if it is a symlink that points to the correct location
-        if let Ok(destination) = fs::read_link(system_path)
+        if let Ok(destination) = fs::read_link(&system_path)
             && destination == config_path
         {
             return;
         }
 
         // -> It isnt
-        ask_for_overwrite(force, system_path);
+        ask_for_overwrite(force, &system_path);
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -38,7 +38,7 @@ pub fn add(path: &Path, force: bool, copy: bool) {
         config_path.display(),
         system_path.display(),
     );
-    create_symlink(&config_path, system_path);
+    create_symlink(&config_path, &system_path);
 }
 
 /// Symlink a the given path to its location in the actual system
@@ -55,10 +55,10 @@ pub fn add_copy(path: &Path, force: bool) {
         fs::exists(path),
         &format!("checking if the path {} already exists", path.display()),
         // And is not equal to the one in the config
-    ) && let Err(e) = paths_equal(&config_path, system_path)
+    ) && let Err(e) = paths_equal(&config_path, &system_path)
     {
         eprintln!("{e}");
-        ask_for_overwrite(force, system_path);
+        ask_for_overwrite(force, &system_path);
     };
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it

@@ -20,9 +20,9 @@ pub fn import(cli_path: &Path, copy: bool) {
 
     // Copy system path to config path
     let copy_result = if system_path.is_dir() {
-        copy_dir(system_path, &config_path)
+        copy_dir(&system_path, &config_path)
     } else {
-        fs::copy(system_path, &config_path).map(|_| ())
+        fs::copy(&system_path, &config_path).map(|_| ())
     };
 
     rerun_with_root_if_permission_denied(

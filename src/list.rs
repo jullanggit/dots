@@ -220,7 +220,7 @@ fn list_copy(items: Vec<String>) {
             fs::exists(path),
             &format!("checking if the path {} already exists", path.display()),
             // And is equal to the one in the config
-        ) && paths_equal(&config_path, system_path).is_ok()
+        ) && paths_equal(&config_path, &system_path).is_ok()
         {
             // Print it
             println!("{item}");
