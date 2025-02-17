@@ -1,7 +1,7 @@
 use crate::{
     config::CONFIG,
     util::{
-        config_path, get_hostname, paths_equal, rerun_with_root_args,
+        config_path, get_hostname, home, paths_equal, rerun_with_root_args,
         rerun_with_root_if_permission_denied, system_path,
     },
 };
@@ -185,6 +185,8 @@ fn process_path(
                 // Convert to a string, so strip_prefix() doesnt remove leading slashes
                 let str = stripped.to_str().expect("Item should be valid UTF-8");
 
+                let str = str.replace(&home(), "/{home}");
+
                 let formatted = str
                     .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
                     .map(Into::into)
@@ -192,7 +194,7 @@ fn process_path(
                     .or(str
                         .strip_prefix(&get_hostname())
                         .map(|str| format!("{{hostname}}{str}")))
-                    .unwrap_or(str.into());
+                    .unwrap_or(str);
 
                 println!("{formatted}");
             }
