@@ -2,9 +2,34 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.0
+
+### Feature
+
+- add Debug commands & config-path debug command
+
+- replace "{home}" with the users home dir in paths
+
+### Other
+
+- Add initial ARCHITECTURE.md
+
+### fix
+#### command_descriptions
+
+- Add missing "."'s
+
+### git-cliff
+
+- sort commits from newest to oldest
+
+- change sort_commits to oldest
+
 ## 0.1.3
 
 ### Other
+
+- Release
 
 - remove unneeded .cargo/config.toml
 
