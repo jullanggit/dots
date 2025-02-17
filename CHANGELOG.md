@@ -2,12 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.3
+
+### fix
+#### list
+
+- when formatting found paths, replace the users home dir with "{home}"
+
 ## 0.2.2
 
 ### Feature
 #### debug
 
 - add system-path
+
+### Other
+
+- Release
 
 ### fix
 #### system_path
