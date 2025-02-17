@@ -1,0 +1,2 @@
+- The cli handling is done in main.rs
+- Each command is then delegated to a method with the commands name in a file with the commands name (for example: `list::list()`)
