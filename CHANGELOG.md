@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.1
+
+### Cargo.toml
+#### categories
+
+- config -> filesystem
+
 ## 0.2.0
 
 ### Feature
@@ -11,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - replace "{home}" with the users home dir in paths
 
 ### Other
+
+- Release
 
 - Add initial ARCHITECTURE.md
 
