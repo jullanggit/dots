@@ -21,8 +21,6 @@ struct PendingPaths {
     queue: Mutex<Vec<PathBuf>>,
     /// the len of the queue
     len: AtomicUsize,
-    /// the amount of threads currently waiting to lock the queue
-    waiting: AtomicUsize,
 }
 impl PendingPaths {
     /// Push to the queue.
@@ -44,15 +42,6 @@ impl PendingPaths {
     }
     fn len(&self) -> usize {
         self.len.load(Ordering::Acquire)
-    }
-    fn waiting(&self) -> usize {
-        self.waiting.load(Ordering::Acquire)
-    }
-    fn start_waiting(&self) {
-        self.waiting.fetch_add(1, Ordering::AcqRel);
-    }
-    fn stop_waiting(&self) {
-        self.waiting.fetch_sub(1, Ordering::AcqRel);
     }
 }
 
@@ -115,8 +104,6 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
 
 /// Try to steal a pending path from another thread.
 fn try_steal_path(pending_paths: &[PendingPaths], my_index: usize) -> Option<PathBuf> {
-    let mut candidate: Option<(usize, usize)> = None; // (thread_index, waiting)
-
     // For all other threads
     for (index, pending_paths) in pending_paths.iter().enumerate() {
         // Skip ourselves
@@ -126,38 +113,13 @@ fn try_steal_path(pending_paths: &[PendingPaths], my_index: usize) -> Option<Pat
 
         // If the other thread's queue has items
         if pending_paths.len() > 0 {
-            let waiting = pending_paths.waiting();
-
-            let this_candidate = Some((index, waiting));
-
-            // If no one is currently waiting
-            if waiting == 0 {
-                // Immediately choose this thread
-                candidate = this_candidate;
-                break;
+            // Try getting an element without blocking
+            if let Ok(Some(path)) = pending_paths.queue.try_lock().map(|mut queue| queue.pop()) {
+                return Some(path);
             }
-
-            // Otherwise, choose the candidate with the smallest waiting count
-            candidate = match candidate {
-                None => this_candidate,
-                Some((_, current_waiting)) if waiting < current_waiting => this_candidate,
-                other => other,
-            };
         }
     }
-
-    if let Some((other_index, _)) = candidate {
-        let other_pending_paths = &pending_paths[other_index];
-
-        // start waiting -> pop -> stop waiting
-        other_pending_paths.start_waiting();
-        let stolen = other_pending_paths.pop();
-        other_pending_paths.stop_waiting();
-
-        stolen
-    } else {
-        None
-    }
+    None
 }
 
 fn process_path(
