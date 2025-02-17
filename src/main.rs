@@ -28,6 +28,7 @@ enum Commands {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
         /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
+        /// "{home}" can be used as a placeholder for the home dir of the user
         path: PathBuf,
 
         #[arg(long)]
@@ -44,14 +45,16 @@ enum Commands {
         /// Format: (sub-dir of ~/.config/rebos/files}/{path to symlink)
         /// If the path is absolute, it is assumed to already be the path to remove
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
+        /// "{home}" can be used as a placeholder for the home dir of the user
         path: PathBuf,
     },
     /// Import the given path from the system
     #[command(arg_required_else_help = true)]
     Import {
         /// Format: (sub-dir of ~/.config/rebos/files}/{path to symlink)
-        /// If the path is absolute, it is assumed to already be the path to remove
+        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system
+        /// "{home}" can be used as a placeholder for the home dir of the user
         path: PathBuf,
 
         #[arg(long)]

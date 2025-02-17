@@ -8,7 +8,7 @@ use std::{
 
 use crate::{SILENT, config::CONFIG};
 
-/// The users home directory
+/// The absolute path to the users home directory.
 pub fn home() -> String {
     env::var("HOME").expect("HOME env variable not set")
 }
@@ -91,11 +91,18 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
         // And replace the absolute path with the relative one to avoid overwriting the entire config_path
         cli_path = relative_path
     }
-
-    // Replace "{hostname}" with the actual hostname
-    if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
+    // If the default subdir wasn't elided, replace "{hostname}" with the actual hostname
+    else if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
         let hostname = get_hostname();
         config_path.push(hostname.trim());
+
+        cli_path = stripped_path;
+    }
+
+    // Replace "{home}" with the users home dir
+    if let Ok(stripped_path) = cli_path.strip_prefix("{home}") {
+        let home = home();
+        config_path.push(&home[1..]); // skip the leading '/' to avoid overwriting the entire config_path
 
         cli_path = stripped_path;
     }

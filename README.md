@@ -14,6 +14,8 @@ The `files_path` directory is split in multiple sub-directories, to allow for di
 As most other symlinks are against the same subdir, you can set a `default_subdir` in the config file.
 Then, you can just omit the default subdir. (For example: `/etc/pacman.conf`)
 
+"{home}" can be used as a placeholder for the home directory of the current user (For example: `/{home}/.config/dots`).
+
 ## Commands:
 All paths are in the format described above.
 
