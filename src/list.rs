@@ -34,13 +34,10 @@ impl PendingPaths {
     /// Pop from the queue.
     /// Note that this may block the current thread
     fn pop(&self) -> Option<PathBuf> {
-        if let Some(popped) = self.queue.lock().unwrap().pop() {
+        self.queue.lock().unwrap().pop().inspect(|_| {
             // successful pop -> decrement self.len
             self.len.fetch_sub(1, Ordering::AcqRel);
-            Some(popped)
-        } else {
-            None
-        }
+        })
     }
     fn len(&self) -> usize {
         self.len.load(Ordering::Acquire)
@@ -74,7 +71,9 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
     // If a thread's own vec is empty, it will try to get items from another thread's vec
     // We keep an external atomic len for each vec, so the threads dont have to lock the mutex to see if there are any elements
     // Additionally we keep a waiting field, so that threads can choose the least waited for vec
-    let pending_paths = Vec::from_iter(iter::repeat_with(PendingPaths::default).take(threads));
+    let pending_paths: Vec<_> = iter::repeat_with(PendingPaths::default)
+        .take(threads)
+        .collect();
     for (index, path) in CONFIG.list_paths.iter().enumerate() {
         pending_paths[index].push(path.into());
     }
@@ -191,9 +190,10 @@ fn process_path(
                     .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
                     .map(Into::into)
                     // If the subdir is the current hostname, replace it with {hostname}
-                    .or(str
-                        .strip_prefix(&get_hostname())
-                        .map(|str| format!("{{hostname}}{str}")))
+                    .or_else(|| {
+                        str.strip_prefix(&get_hostname())
+                            .map(|str| format!("{{hostname}}{str}"))
+                    })
                     .unwrap_or(str);
 
                 println!("{formatted}");

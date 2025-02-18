@@ -120,6 +120,7 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
 
 /// Checks if the config & system paths are already equal
 /// Does *not* currently support directories
+#[expect(clippy::filetype_is_file)]
 pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'static str> {
     // Get metadatas
     let system_metadata = rerun_with_root_if_permission_denied(

@@ -46,7 +46,10 @@ pub fn add_copy(path: &Path, force: bool) {
     let config_path = config_path(path);
     let system_path = system_path(path);
 
-    assert!(!config_path.is_dir(), "Only files and symlinks are currently supported with --copy");
+    assert!(
+        !config_path.is_dir(),
+        "Only files and symlinks are currently supported with --copy"
+    );
 
     // If path exists on the system
     if rerun_with_root_if_permission_denied(
@@ -92,6 +95,7 @@ fn ask_for_overwrite(force: bool, system_path: &Path) {
 }
 
 /// Creates a symlink from `config_path` to `system_path`
+#[expect(clippy::wildcard_enum_match_arm)]
 fn create_symlink(config_path: &Path, system_path: &Path) {
     // Try creating the symlink
     if let Err(e) = symlink(config_path, system_path) {
@@ -135,7 +139,7 @@ fn bool_question(question: &str) -> bool {
         match buffer.trim() {
             "y" | "Y" | "yes" | "Yes" => return true,
             "n" | "N" | "no" | "No" => return false,
-            _other => continue,
+            _other => {}
         }
     }
 }

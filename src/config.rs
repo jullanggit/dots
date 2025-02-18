@@ -26,8 +26,8 @@ impl Config {
         for line in string.lines() {
             match line.split_once('=') {
                 Some((key, value)) => match key.trim() {
-                    "default_subdir" => config.default_subdir = value.trim().to_owned(),
-                    "files_path" => config.files_path = value.trim().to_owned(),
+                    "default_subdir" => value.trim().clone_into(&mut config.default_subdir),
+                    "files_path" => value.trim().clone_into(&mut config.files_path),
                     "list_paths" => config
                         .list_paths
                         .extend(value.split(',').map(|value| value.trim().to_owned())),
