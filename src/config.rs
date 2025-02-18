@@ -10,7 +10,7 @@ pub struct Config {
     pub default_subdir: String,
     /// The path to the files/ directory
     pub files_path: String,
-    /// The paths that should be searched by list()
+    /// The paths that should be searched by `list()`
     pub list_paths: Vec<String>,
     /// Whether to run 'list' with root privileges
     pub root: bool,
@@ -30,7 +30,7 @@ impl Config {
                     "files_path" => config.files_path = value.trim().to_owned(),
                     "list_paths" => config
                         .list_paths
-                        .extend(value.split(',').map(|value| value.trim().to_string())),
+                        .extend(value.split(',').map(|value| value.trim().to_owned())),
                     "root" => config.root = true,
                     other => panic!("Unknown config entry: {other}"),
                 },

@@ -38,7 +38,7 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
     // Overwrite the exe path with the absolute path if possible
     if let Some(absolute_path) = current_exe()
         .ok()
-        .and_then(|path| path.to_str().map(|path| path.to_owned()))
+        .and_then(|path| path.to_str().map(ToOwned::to_owned))
     {
         args[0] = absolute_path;
     }
@@ -54,10 +54,10 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
         .wait()
         .expect("Failed to wait on child process");
 
-    if !status.success() {
-        exit(status.code().unwrap_or(1));
-    } else {
+    if status.success() {
         exit(0);
+    } else {
+        exit(status.code().unwrap_or(1));
     }
 }
 
@@ -82,9 +82,10 @@ pub fn system_path(path: &Path) -> PathBuf {
 /// Converts the path that should be symlinked to the path in the files/ directory
 #[expect(clippy::literal_string_with_formatting_args)]
 pub fn config_path(mut cli_path: &Path) -> PathBuf {
-    if Path::new(&CONFIG.default_subdir).is_absolute() {
-        panic!("Default subdir is not allowed to be absolute");
-    }
+    assert!(
+        !Path::new(&CONFIG.default_subdir).is_absolute(),
+        "Default subdir is not allowed to be absolute"
+    );
 
     let mut config_path = PathBuf::from(&CONFIG.files_path);
 
@@ -94,7 +95,7 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
         config_path.push(&CONFIG.default_subdir);
 
         // And replace the absolute path with the relative one to avoid overwriting the entire config_path
-        cli_path = relative_path
+        cli_path = relative_path;
     }
     // If the default subdir wasn't elided, replace "{hostname}" with the actual hostname
     else if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
@@ -183,7 +184,7 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
     }
 }
 
-/// Inform the user of the `failed_action` and rerun with root privileges, if the result is a PermissionDenied, panic on any other error
+/// Inform the user of the `failed_action` and rerun with root privileges, if the result is a `PermissionDenied`, panic on any other error
 pub fn rerun_with_root_if_permission_denied<T>(result: io::Result<T>, action: &str) -> T {
     match result {
         Ok(inner) => inner,

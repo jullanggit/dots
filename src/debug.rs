@@ -1,5 +1,5 @@
 use crate::{
-    DebugCommands::{self, *},
+    DebugCommands::{self, ConfigPath, SystemPath},
     util::{config_path, system_path},
 };
 

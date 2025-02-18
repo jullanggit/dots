@@ -1,6 +1,6 @@
 use std::{
     fs::{self, create_dir_all, symlink_metadata},
-    io::{ErrorKind, Write, stdin, stdout},
+    io::{ErrorKind, Write as _, stdin, stdout},
     os::unix::fs::symlink,
     path::Path,
     process::exit,
@@ -46,9 +46,7 @@ pub fn add_copy(path: &Path, force: bool) {
     let config_path = config_path(path);
     let system_path = system_path(path);
 
-    if config_path.is_dir() {
-        panic!("Only files and symlinks are currently supported with --copy")
-    }
+    assert!(!config_path.is_dir(), "Only files and symlinks are currently supported with --copy");
 
     // If path exists on the system
     if rerun_with_root_if_permission_denied(
@@ -59,7 +57,7 @@ pub fn add_copy(path: &Path, force: bool) {
     {
         eprintln!("{e}");
         ask_for_overwrite(force, &system_path);
-    };
+    }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
     println!(
@@ -113,7 +111,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
                 println!("Error creating symlink: {other:?}");
             }
         }
-    };
+    }
 }
 
 /// Asks the user the given question and returns the users answer.

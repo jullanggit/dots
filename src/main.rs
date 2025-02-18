@@ -27,7 +27,7 @@ enum Commands {
     #[command(arg_required_else_help = true)]
     Add {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
-        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>.
+        /// If the path is absolute, it is automatically prepended with <`DEFAULT_SUBDIR`>.
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system.
         /// "{home}" can be used as a placeholder for the home dir of the user.
         path: PathBuf,
@@ -53,7 +53,7 @@ enum Commands {
     #[command(arg_required_else_help = true)]
     Import {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
-        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>.
+        /// If the path is absolute, it is automatically prepended with <`DEFAULT_SUBDIR`>.
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system.
         /// "{home}" can be used as a placeholder for the home dir of the user.
         path: PathBuf,
@@ -81,7 +81,7 @@ enum DebugCommands {
     /// Print the config path of the given path
     ConfigPath {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
-        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>.
+        /// If the path is absolute, it is automatically prepended with <`DEFAULT_SUBDIR`>.
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system.
         /// "{home}" can be used as a placeholder for the home dir of the user.
         path: PathBuf,
@@ -89,7 +89,7 @@ enum DebugCommands {
     /// Print the system path of the given path
     SystemPath {
         /// Format: (sub-dir of ~/.config/rebos/files)/(path to symlink).
-        /// If the path is absolute, it is automatically prepended with <DEFAULT_SUBDIR>.
+        /// If the path is absolute, it is automatically prepended with <`DEFAULT_SUBDIR`>.
         /// "{hostname}" can be used as a placeholder for the actual hostname of the system.
         /// "{home}" can be used as a placeholder for the home dir of the user.
         path: PathBuf,

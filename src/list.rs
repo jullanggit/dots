@@ -226,6 +226,6 @@ fn list_copy(items: Vec<String>) {
         {
             // Print it
             println!("{item}");
-        };
+        }
     }
 }
