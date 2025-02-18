@@ -6,7 +6,7 @@ use std::{
     process::{Command, exit},
 };
 
-use color_eyre::eyre::{Context as _, OptionExt, Result, eyre};
+use color_eyre::eyre::{Context as _, OptionExt as _, Result, eyre};
 
 use crate::{SILENT, config::CONFIG};
 
