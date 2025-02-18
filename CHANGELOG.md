@@ -2,7 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.5
+
+### Other
+
+- use color-eyre for error handeling
+
+- fix some more clippy lints
+
+- cargo clippy --fix
+
+- Add clippy lints
+
 ## 0.2.4
+
+### Other
+
+- Release
 
 ### README
 
