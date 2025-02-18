@@ -16,7 +16,10 @@ Then, you can just omit the default subdir. (For example: `/etc/pacman.conf`)
 
 "{home}" can be used as a placeholder for the home directory of the current user (For example: `/{home}/.config/dots`).
 
-## Commands:
+## Ideas, contributing, bugs etc
+- Dots is still very much under active development, so if you have any ideas / feature requests or encounter any bugs, please open an issue or a PR
+
+## Commands
 All paths are in the format described above.
 
 - add:     Add the given path to the system
@@ -34,7 +37,7 @@ Note that paths added using --copy will not be detected by list, instead a list 
 ### List
 - Paths to search for symlinks can be configured in the config file under the `list_paths` key
 
-## Options:
+## Options
 - silent: suppress any non-primary output
 
 ## Config file
