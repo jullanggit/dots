@@ -6,18 +6,20 @@ use std::{
     process::{Command, exit},
 };
 
+use color_eyre::eyre::{Context as _, OptionExt, Result, eyre};
+
 use crate::{SILENT, config::CONFIG};
 
 /// The absolute path to the users home directory.
-pub fn home() -> String {
-    env::var("HOME").expect("HOME env variable not set")
+pub fn home() -> Result<String> {
+    env::var("HOME").wrap_err("Failed to get HOME env variable")
 }
 
-pub fn get_hostname() -> String {
-    fs::read_to_string("/etc/hostname")
-        .expect("Failed to get hostname")
+pub fn get_hostname() -> Result<String> {
+    Ok(fs::read_to_string("/etc/hostname")
+        .wrap_err("Failed to read /etc/hostname")?
         .trim()
-        .into()
+        .into())
 }
 
 /// Inform the user of the `failed_action` and rerun with root privileges
@@ -43,7 +45,7 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
         args[0] = absolute_path;
     }
 
-    let home = env::var("HOME").expect("HOME env variable not set");
+    let home = home().unwrap();
 
     let status = Command::new("/usr/bin/sudo")
         // Preserve $HOME
@@ -62,26 +64,31 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
 }
 
 /// Converts the path relative to files/ to the location on the actual system. (by trimming the subdir of files/ away)
-pub fn system_path(path: &Path) -> PathBuf {
-    let str = path.as_os_str().to_str().unwrap();
+pub fn system_path(path: &Path) -> Result<PathBuf> {
+    let str = path
+        .as_os_str()
+        .to_str()
+        .ok_or_eyre("Failed to convert path to string")?;
 
     // Replace {home} with the users home dir
-    let resolved_home = str.replace("{home}", &home()[1..]);
+    let resolved_home = str.replace("{home}", &home()?[1..]);
 
-    if path.is_relative() {
+    Ok(if path.is_relative() {
         // Only keep the path from the first /
-        let absolute = &resolved_home[str.find('/').unwrap()..];
+        let absolute = &resolved_home[str
+            .find('/')
+            .ok_or_else(|| eyre!("Failed finding '/' in path '{}'", path.display()))?..];
 
         absolute.into()
     } else {
         // The default subdir was elided, so the path is already the correct one
         resolved_home.into()
-    }
+    })
 }
 
 /// Converts the path that should be symlinked to the path in the files/ directory
 #[expect(clippy::literal_string_with_formatting_args)]
-pub fn config_path(mut cli_path: &Path) -> PathBuf {
+pub fn config_path(mut cli_path: &Path) -> Result<PathBuf> {
     assert!(
         !Path::new(&CONFIG.default_subdir).is_absolute(),
         "Default subdir is not allowed to be absolute"
@@ -100,14 +107,14 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
     // If the default subdir wasn't elided, replace "{hostname}" with the actual hostname
     else if let Ok(stripped_path) = cli_path.strip_prefix("{hostname}") {
         let hostname = get_hostname();
-        config_path.push(hostname.trim());
+        config_path.push(hostname?.trim());
 
         cli_path = stripped_path;
     }
 
     // Replace "{home}" with the users home dir
     if let Ok(stripped_path) = cli_path.strip_prefix("{home}") {
-        let home = home();
+        let home = home()?;
         config_path.push(&home[1..]); // skip the leading '/' to avoid overwriting the entire config_path
 
         cli_path = stripped_path;
@@ -115,46 +122,48 @@ pub fn config_path(mut cli_path: &Path) -> PathBuf {
 
     config_path.push(cli_path);
 
-    config_path
+    Ok(config_path)
 }
 
 /// Checks if the config & system paths are already equal
 /// Does *not* currently support directories
 #[expect(clippy::filetype_is_file)]
-pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'static str> {
+pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
     // Get metadatas
     let system_metadata = rerun_with_root_if_permission_denied(
         fs::symlink_metadata(system_path),
         "getting metadata for system path",
-    );
+    )?;
     let config_metadata = rerun_with_root_if_permission_denied(
         fs::symlink_metadata(config_path),
         "getting metadata for config path",
-    );
+    )?;
 
     if system_metadata.file_type() != config_metadata.file_type() {
-        Err("Path already exists and differs in file type")
+        Err(eyre!("Path already exists and differs in file type"))
     } else if system_metadata.len() != config_metadata.len() {
-        Err("Path already exists and differs in len")
+        Err(eyre!("Path already exists and differs in len"))
     } else if system_metadata.permissions() != config_metadata.permissions() {
-        Err("Path already exists and differs in permissions")
+        Err(eyre!("Path already exists and differs in permissions"))
         // If they are symlinks
     } else if system_metadata.file_type().is_symlink()
     // And their destinations dont match
         && rerun_with_root_if_permission_denied(
             fs::read_link(system_path),
             "reading symlink destination for system path",
-        ) != rerun_with_root_if_permission_denied(
+        )? != rerun_with_root_if_permission_denied(
             fs::read_link(system_path),
             "reading symlink destination for system path",
-        )
+        )?
     {
-        Err("Path already exists and differs in symlink destination")
+        Err(eyre!(
+            "Path already exists and differs in symlink destination"
+        ))
     } else if system_metadata.file_type().is_file() {
         let system_file =
-            rerun_with_root_if_permission_denied(File::open(system_path), "opening system file");
+            rerun_with_root_if_permission_denied(File::open(system_path), "opening system file")?;
         let config_file =
-            rerun_with_root_if_permission_denied(File::open(config_path), "opening config file");
+            rerun_with_root_if_permission_denied(File::open(config_path), "opening config file")?;
 
         let mut system_reader = BufReader::new(system_file);
         let mut config_reader = BufReader::new(config_file);
@@ -166,18 +175,18 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
             let system_read = rerun_with_root_if_permission_denied(
                 system_reader.read(&mut system_buf),
                 "reading system file",
-            );
+            )?;
             let config_read = rerun_with_root_if_permission_denied(
                 config_reader.read(&mut config_buf),
                 "reading config file",
-            );
+            )?;
 
             if system_read != config_read {
-                return Err("Path already exists and differs in content length");
+                return Err(eyre!("Path already exists and differs in content length"));
             } else if system_read == 0 {
                 return Ok(()); // EOF & identical
             } else if system_buf[..system_read] != config_buf[..config_read] {
-                return Err("Path already exists and differs in file contents");
+                return Err(eyre!("Path already exists and differs in file contents"));
             }
         }
     } else {
@@ -186,15 +195,10 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<(), &'stati
 }
 
 /// Inform the user of the `failed_action` and rerun with root privileges, if the result is a `PermissionDenied`, panic on any other error
-pub fn rerun_with_root_if_permission_denied<T>(result: io::Result<T>, action: &str) -> T {
-    match result {
-        Ok(inner) => inner,
-        Err(e) => {
-            if e.kind() == ErrorKind::PermissionDenied {
-                rerun_with_root(action)
-            } else {
-                panic!("Error {action}: {e}",)
-            }
+pub fn rerun_with_root_if_permission_denied<T>(result: io::Result<T>, action: &str) -> Result<T> {
+    Ok(result.inspect_err(|e| {
+        if e.kind() == ErrorKind::PermissionDenied {
+            rerun_with_root(action)
         }
-    }
+    })?)
 }

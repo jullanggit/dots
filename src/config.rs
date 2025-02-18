@@ -1,8 +1,14 @@
 use std::{fs, sync::LazyLock};
 
+use color_eyre::{
+    Section as _,
+    eyre::{Context as _, Result, eyre},
+};
+
 use crate::util::home;
 
-pub static CONFIG: LazyLock<Config> = LazyLock::new(Config::load);
+#[expect(clippy::unwrap_used)]
+pub static CONFIG: LazyLock<Config> = LazyLock::new(|| Config::load().unwrap());
 
 #[derive(Default)]
 pub struct Config {
@@ -16,10 +22,12 @@ pub struct Config {
     pub root: bool,
 }
 impl Config {
-    fn load() -> Self {
-        let path = format!("{}/.config/dots", home());
+    fn load() -> Result<Self> {
+        let path = format!("{}/.config/dots", home()?);
 
-        let string = fs::read_to_string(path).expect("Failed to read config");
+        let string = fs::read_to_string(path)
+            .wrap_err("Failed to read config")
+            .suggestion("Try creating {home}/.config/dots")?;
 
         let mut config = Self::default();
 
@@ -32,20 +40,21 @@ impl Config {
                         .list_paths
                         .extend(value.split(',').map(|value| value.trim().to_owned())),
                     "root" => config.root = true,
-                    other => panic!("Unknown config entry: {other}"),
+                    other => return Err(eyre!("Unknown config entry: {other}")),
                 },
                 None => match line.trim() {
                     "root" => config.root = true,
-                    other => panic!("Unknown config key: {other}"),
+                    other => return Err(eyre!("Unknown config key: {other}")),
                 },
             }
         }
 
-        assert!(
-            !config.default_subdir.is_empty(),
-            "default_subdir is empty or not in the config"
-        );
+        if config.default_subdir.is_empty() {
+            return Err(eyre!("default_subdir is empty or not in the config")).suggestion(
+                "Try adding something like `default_subdir = common` to your dots config file",
+            );
+        }
 
-        config
+        Ok(config)
     }
 }

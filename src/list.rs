@@ -1,3 +1,5 @@
+use color_eyre::eyre::{Context as _, Result};
+
 use crate::{
     config::CONFIG,
     util::{
@@ -54,7 +56,7 @@ impl PendingPaths {
 }
 
 /// Prints all symlinks on the system, that are probably made by dots
-pub fn list(rooted: bool, copy: Option<Vec<String>>) {
+pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
     if let Some(items) = copy {
         return list_copy(items);
     }
@@ -95,7 +97,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
                         // Or try stealing a path from another thread's queue
                         .or_else(|| try_steal_path(&pending_paths, my_index))
                     {
-                        process_path(&pending_paths, &pending, my_index, &path);
+                        process_path(&pending_paths, &pending, my_index, &path).unwrap();
                         continue;
                     }
 
@@ -110,6 +112,8 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) {
             });
         }
     });
+
+    Ok(())
 }
 
 /// Try to steal a pending path from another thread.
@@ -164,39 +168,47 @@ fn process_path(
     pending: &AtomicUsize,
     thread_index: usize,
     path: &Path,
-) {
+) -> Result<()> {
     // Add ourselves to pending
     pending.fetch_add(1, Ordering::AcqRel);
 
     // Ignore errors with .flatten()
-    for dir_entry in fs::read_dir(path).unwrap().flatten() {
+    for dir_entry in fs::read_dir(path)
+        .wrap_err_with(|| format!("Failed to read dir {}", path.display()))?
+        .flatten()
+    {
+        let entry_path = dir_entry.path();
+
         // Get the file type
-        let file_type = dir_entry.file_type().unwrap();
+        let file_type = dir_entry
+            .file_type()
+            .wrap_err_with(|| format!("Failed to get file type of '{}'", entry_path.display()))?;
 
         if file_type.is_symlink() {
             // get the entries target
-            let target = fs::read_link(dir_entry.path()).expect("Failed to get target");
+            let target = fs::read_link(&entry_path)
+                .wrap_err_with(|| format!("Failed to get target of '{}'", entry_path.display()))?;
             // If the target is in the files/ dir...
             if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
                 // ...and was plausibly created by dots...
-                && system_path(stripped) == dir_entry.path()
+                && system_path(stripped)? == dir_entry.path()
             {
                 // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                let str = stripped.to_str().expect("Item should be valid UTF-8");
+                if let Some(str) = stripped.to_str() {
+                    let str = str.replace(&home()?, "/{home}");
 
-                let str = str.replace(&home(), "/{home}");
+                    let formatted = str
+                        .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                        .map(Into::into)
+                        // If the subdir is the current hostname, replace it with {hostname}
+                        .or_else(|| {
+                            str.strip_prefix(&get_hostname().ok()?)
+                                .map(|str| format!("{{hostname}}{str}"))
+                        })
+                        .unwrap_or(str);
 
-                let formatted = str
-                    .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                    .map(Into::into)
-                    // If the subdir is the current hostname, replace it with {hostname}
-                    .or_else(|| {
-                        str.strip_prefix(&get_hostname())
-                            .map(|str| format!("{{hostname}}{str}"))
-                    })
-                    .unwrap_or(str);
-
-                println!("{formatted}");
+                    println!("{formatted}");
+                }
             }
         } else if file_type.is_dir() {
             let path = dir_entry.path();
@@ -208,24 +220,28 @@ fn process_path(
 
     // Remove ourselves from pending
     pending.fetch_sub(1, Ordering::AcqRel);
+
+    Ok(())
 }
 
-fn list_copy(items: Vec<String>) {
+fn list_copy(items: Vec<String>) -> Result<()> {
     for item in items {
         let path = Path::new(&item);
 
-        let config_path = config_path(path);
-        let system_path = system_path(path);
+        let config_path = config_path(path)?;
+        let system_path = system_path(path)?;
 
         // If path exists on the system
         if rerun_with_root_if_permission_denied(
             fs::exists(path),
             &format!("checking if the path {} already exists", path.display()),
             // And is equal to the one in the config
-        ) && paths_equal(&config_path, &system_path).is_ok()
+        )? && paths_equal(&config_path, &system_path).is_ok()
         {
             // Print it
             println!("{item}");
         }
     }
+
+    Ok(())
 }

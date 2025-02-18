@@ -6,18 +6,23 @@ use std::{
     process::exit,
 };
 
+use color_eyre::{
+    Result,
+    eyre::{OptionExt as _, eyre},
+};
+
 use crate::util::{
     config_path, paths_equal, rerun_with_root, rerun_with_root_if_permission_denied, system_path,
 };
 
 /// Symlink a the given path to its location in the actual system
-pub fn add(path: &Path, force: bool, copy: bool) {
+pub fn add(path: &Path, force: bool, copy: bool) -> Result<()> {
     if copy {
         return add_copy(path, force);
     }
 
-    let config_path = config_path(path);
-    let system_path = system_path(path);
+    let config_path = config_path(path)?;
+    let system_path = system_path(path)?;
 
     // If the path already exists
     if symlink_metadata(&system_path).is_ok() {
@@ -25,11 +30,11 @@ pub fn add(path: &Path, force: bool, copy: bool) {
         if let Ok(destination) = fs::read_link(&system_path)
             && destination == config_path
         {
-            return;
+            return Ok(());
         }
 
         // -> It isnt
-        ask_for_overwrite(force, &system_path);
+        ask_for_overwrite(force, &system_path)?;
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -38,28 +43,29 @@ pub fn add(path: &Path, force: bool, copy: bool) {
         config_path.display(),
         system_path.display(),
     );
-    create_symlink(&config_path, &system_path);
+    create_symlink(&config_path, &system_path)
 }
 
 /// Symlink a the given path to its location in the actual system
-pub fn add_copy(path: &Path, force: bool) {
-    let config_path = config_path(path);
-    let system_path = system_path(path);
+pub fn add_copy(path: &Path, force: bool) -> Result<()> {
+    let config_path = config_path(path)?;
+    let system_path = system_path(path)?;
 
-    assert!(
-        !config_path.is_dir(),
-        "Only files and symlinks are currently supported with --copy"
-    );
+    if config_path.is_dir() {
+        return Err(eyre!(
+            "Only files and symlinks are currently supported with --copy"
+        ));
+    }
 
     // If path exists on the system
     if rerun_with_root_if_permission_denied(
         fs::exists(path),
         &format!("checking if the path {} already exists", path.display()),
         // And is not equal to the one in the config
-    ) && let Err(e) = paths_equal(&config_path, &system_path)
+    )? && let Err(e) = paths_equal(&config_path, &system_path)
     {
         eprintln!("{e}");
-        ask_for_overwrite(force, &system_path);
+        ask_for_overwrite(force, &system_path)?;
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -69,13 +75,13 @@ pub fn add_copy(path: &Path, force: bool) {
         system_path.display(),
     );
     rerun_with_root_if_permission_denied(
-        fs::copy(config_path, system_path),
+        fs::copy(config_path, system_path).map(|_| {}), // Ignore number of bytes copied
         "copying config path to system path",
-    );
+    )
 }
 
 /// Asks for overwrite and removes the path from the system if requested, exits if not
-fn ask_for_overwrite(force: bool, system_path: &Path) {
+fn ask_for_overwrite(force: bool, system_path: &Path) -> Result<()> {
     if force
         || bool_question(&format!(
             "The path {} already exists, overwrite?",
@@ -88,7 +94,7 @@ fn ask_for_overwrite(force: bool, system_path: &Path) {
             fs::remove_file(system_path)
         };
 
-        rerun_with_root_if_permission_denied(result, "removing path");
+        rerun_with_root_if_permission_denied(result, "removing path")
     } else {
         exit(1)
     }
@@ -96,7 +102,7 @@ fn ask_for_overwrite(force: bool, system_path: &Path) {
 
 /// Creates a symlink from `config_path` to `system_path`
 #[expect(clippy::wildcard_enum_match_arm)]
-fn create_symlink(config_path: &Path, system_path: &Path) {
+fn create_symlink(config_path: &Path, system_path: &Path) -> Result<()> {
     // Try creating the symlink
     if let Err(e) = symlink(config_path, system_path) {
         match e.kind() {
@@ -105,17 +111,22 @@ fn create_symlink(config_path: &Path, system_path: &Path) {
             }
             ErrorKind::NotFound => {
                 rerun_with_root_if_permission_denied(
-                    create_dir_all(system_path.parent().expect("Path should have a parent")),
+                    create_dir_all(
+                        system_path
+                            .parent()
+                            .ok_or_eyre("Failed to get parent of system path")?,
+                    ),
                     "creating parent directories",
-                );
+                )?;
 
-                create_symlink(config_path, system_path);
+                create_symlink(config_path, system_path)?;
             }
-            other => {
-                println!("Error creating symlink: {other:?}");
+            _ => {
+                return Err(e.into());
             }
         }
     }
+    Ok(())
 }
 
 /// Asks the user the given question and returns the users answer.

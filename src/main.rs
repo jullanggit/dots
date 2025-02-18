@@ -9,6 +9,7 @@ mod remove;
 mod util;
 
 use clap::{Parser, Subcommand};
+use color_eyre::eyre::Result;
 use std::{path::PathBuf, sync::OnceLock};
 
 #[derive(Parser, Debug)]
@@ -98,10 +99,15 @@ enum DebugCommands {
 
 static SILENT: OnceLock<bool> = OnceLock::new();
 
-fn main() {
+#[expect(clippy::expect_used)]
+fn main() -> Result<()> {
+    color_eyre::install()?;
+
     let args = Cli::parse();
 
-    SILENT.set(args.silent).expect("Failed to set SILENT");
+    SILENT
+        .set(args.silent)
+        .expect("SILENT shouldnt be already initialized");
 
     match args.command {
         Commands::Add { path, force, copy } => add::add(&path, force, copy),

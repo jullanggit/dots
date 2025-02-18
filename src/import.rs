@@ -4,17 +4,22 @@ use std::{
     path::Path,
 };
 
+use color_eyre::eyre::Result;
+
 use crate::{
     add::add,
     util::{config_path, rerun_with_root_if_permission_denied, system_path},
 };
 
 /// Imports the given config path from the system path
-pub fn import(cli_path: &Path, copy: bool) {
-    let config_path = config_path(cli_path);
-    let system_path = system_path(cli_path);
+pub fn import(cli_path: &Path, copy: bool) -> Result<()> {
+    let config_path = config_path(cli_path)?;
+    let system_path = system_path(cli_path)?;
 
-    assert!(!(copy && system_path.is_dir()), "Only files and symlinks are currently supported with --copy");
+    assert!(
+        !(copy && system_path.is_dir()),
+        "Only files and symlinks are currently supported with --copy"
+    );
 
     // Copy system path to config path
     let copy_result = if system_path.is_dir() {
@@ -30,9 +35,9 @@ pub fn import(cli_path: &Path, copy: bool) {
             system_path.display(),
             config_path.display()
         ),
-    );
+    )?;
 
-    add(cli_path, true, copy);
+    add(cli_path, true, copy)
 }
 
 /// Recursively copies the source directory to the target path
