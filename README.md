@@ -46,10 +46,21 @@ Note that paths added using --copy will not be detected by list, instead a list 
 ### Format
 - default_subdir & files_path:
   - key = value
-- list_paths
+- list_paths & ignore_paths
   - key = value(,value,value)
 - root
   - True if specified, false otherwise
+
+### files_path
+- the path to the files/ directory
+### default_subdir
+- the default subdir that will get filled in when subdir is elided
+### list_paths
+- the paths that `list` searches through
+### ignore_paths
+- the paths that `list` ignores
+### root
+- whether `list` should run as root
 
 ## Installing
 `cargo +nightly install atem-dots`
