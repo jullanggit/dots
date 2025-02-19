@@ -224,8 +224,11 @@ fn process_path(
             } else if file_type.is_dir() {
                 let path = dir_entry.path();
 
-                // Recurse into the dir
-                pending_paths[thread_index].push(path);
+                // Filter out ignored paths
+                if !CONFIG.ignore_paths.contains(&path) {
+                    // Recurse into the dir
+                    pending_paths[thread_index].push(path);
+                }
             }
         }
 

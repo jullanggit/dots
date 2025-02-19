@@ -1,4 +1,4 @@
-use std::{fs, sync::LazyLock};
+use std::{fs, path::PathBuf, sync::LazyLock};
 
 use color_eyre::{
     Section as _,
@@ -18,6 +18,8 @@ pub struct Config {
     pub files_path: String,
     /// The paths that should be searched by `list()`
     pub list_paths: Vec<String>,
+    /// The paths that shouldn't be searched by `list()`
+    pub ignore_paths: Vec<PathBuf>,
     /// Whether to run 'list' with root privileges
     pub root: bool,
 }
@@ -39,6 +41,9 @@ impl Config {
                     "list_paths" => config
                         .list_paths
                         .extend(value.split(',').map(|value| value.trim().to_owned())),
+                    "ignore_paths" => config
+                        .ignore_paths
+                        .extend(value.split(',').map(|value| value.trim().into())),
                     "root" => config.root = true,
                     other => return Err(eyre!("Unknown config entry: {other}")),
                 },
