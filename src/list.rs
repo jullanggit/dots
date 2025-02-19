@@ -231,10 +231,11 @@ fn process_path(
                 }
             }
         }
-
-        // Remove ourselves from pending
-        pending.fetch_sub(1, Ordering::AcqRel);
     }
+
+    // Remove ourselves from pending
+    pending.fetch_sub(1, Ordering::AcqRel);
+
     Ok(())
 }
 
