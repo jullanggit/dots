@@ -29,17 +29,26 @@ struct PendingPaths {
 impl PendingPaths {
     /// Push to the queue.
     /// Note that this may block the current thread
+    #[expect(clippy::expect_used)] // We only panic if another thread already did
     fn push(&self, value: PathBuf) {
-        self.queue.lock().unwrap().push(value);
+        self.queue
+            .lock()
+            .expect("No other threads should panic")
+            .push(value);
         self.len.fetch_add(1, Ordering::AcqRel);
     }
     /// Pop from the queue.
     /// Note that this may block the current thread
+    #[expect(clippy::expect_used)] // We only panic if another thread already did
     fn pop(&self) -> Option<PathBuf> {
-        self.queue.lock().unwrap().pop().inspect(|_| {
-            // successful pop -> decrement self.len
-            self.len.fetch_sub(1, Ordering::AcqRel);
-        })
+        self.queue
+            .lock()
+            .expect("No other threads should panic")
+            .pop()
+            .inspect(|_| {
+                // successful pop -> decrement self.len
+                self.len.fetch_sub(1, Ordering::AcqRel);
+            })
     }
     fn len(&self) -> usize {
         self.len.load(Ordering::Acquire)
@@ -56,6 +65,7 @@ impl PendingPaths {
 }
 
 /// Prints all symlinks on the system, that are probably made by dots
+#[expect(clippy::unwrap_used)] // Cant really handle errors in worker threads, we'd unwrap them at some point anyways
 pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
     if let Some(items) = copy {
         return list_copy(items);
@@ -97,7 +107,9 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
                         // Or try stealing a path from another thread's queue
                         .or_else(|| try_steal_path(&pending_paths, my_index))
                     {
-                        process_path(&pending_paths, &pending, my_index, &path).unwrap();
+                        process_path(&pending_paths, &pending, my_index, &path)
+                            .wrap_err_with(|| format!("Failed to process path {}", path.display()))
+                            .unwrap();
                         continue;
                     }
 

@@ -23,14 +23,16 @@ pub fn get_hostname() -> Result<String> {
 }
 
 /// Inform the user of the `failed_action` and rerun with root privileges
+#[expect(clippy::expect_used)] // We dont return anyways, so we might as well panic
 pub fn rerun_with_root(failed_action: &str) -> ! {
-    if !SILENT.get().unwrap() {
+    if !SILENT.get().expect("Failed to get SILENT") {
         println!("{failed_action} requires root privileges",);
     }
     rerun_with_root_args(&[]);
 }
 
 /// Rerun with root privileges, and add the provided args to the command
+#[expect(clippy::expect_used)] // We dont return anyways, so we might as well panic
 pub fn rerun_with_root_args(args: &[&str]) -> ! {
     // Collect args
     let mut args: Vec<_> = env::args()
@@ -45,7 +47,7 @@ pub fn rerun_with_root_args(args: &[&str]) -> ! {
         args[0] = absolute_path;
     }
 
-    let home = home().unwrap();
+    let home = home().expect("Failed to get users home di");
 
     let status = Command::new("/usr/bin/sudo")
         // Preserve $HOME
