@@ -184,55 +184,54 @@ fn process_path(
     // Add ourselves to pending
     pending.fetch_add(1, Ordering::AcqRel);
 
-    // Ignore errors with .flatten()
-    for dir_entry in fs::read_dir(path)
-        .wrap_err_with(|| format!("Failed to read dir {}", path.display()))?
-        .flatten()
-    {
-        let entry_path = dir_entry.path();
+    if let Ok(read_dir) = fs::read_dir(path) {
+        // Ignore errors with .flatten()
+        for dir_entry in read_dir.flatten() {
+            let entry_path = dir_entry.path();
 
-        // Get the file type
-        let file_type = dir_entry
-            .file_type()
-            .wrap_err_with(|| format!("Failed to get file type of '{}'", entry_path.display()))?;
+            // Get the file type
+            let file_type = dir_entry.file_type().wrap_err_with(|| {
+                format!("Failed to get file type of '{}'", entry_path.display())
+            })?;
 
-        if file_type.is_symlink() {
-            // get the entries target
-            let target = fs::read_link(&entry_path)
-                .wrap_err_with(|| format!("Failed to get target of '{}'", entry_path.display()))?;
-            // If the target is in the files/ dir...
-            if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
+            if file_type.is_symlink() {
+                // get the entries target
+                // Dont panic on failure
+                if let Ok(target) = fs::read_link(&entry_path) {
+                    // If the target is in the files/ dir...
+                    if let Ok(stripped) = target.strip_prefix(&CONFIG.files_path)
                 // ...and was plausibly created by dots...
                 && system_path(stripped)? == dir_entry.path()
-            {
-                // Convert to a string, so strip_prefix() doesnt remove leading slashes
-                if let Some(str) = stripped.to_str() {
-                    let str = str.replace(&home()?, "/{home}");
+                    {
+                        // Convert to a string, so strip_prefix() doesnt remove leading slashes
+                        if let Some(str) = stripped.to_str() {
+                            let str = str.replace(&home()?, "/{home}");
 
-                    let formatted = str
-                        .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
-                        .map(Into::into)
-                        // If the subdir is the current hostname, replace it with {hostname}
-                        .or_else(|| {
-                            str.strip_prefix(&get_hostname().ok()?)
-                                .map(|str| format!("{{hostname}}{str}"))
-                        })
-                        .unwrap_or(str);
+                            let formatted = str
+                                .strip_prefix(&CONFIG.default_subdir) // If the subdir is the default one, remove it
+                                .map(Into::into)
+                                // If the subdir is the current hostname, replace it with {hostname}
+                                .or_else(|| {
+                                    str.strip_prefix(&get_hostname().ok()?)
+                                        .map(|str| format!("{{hostname}}{str}"))
+                                })
+                                .unwrap_or(str);
 
-                    println!("{formatted}");
+                            println!("{formatted}");
+                        }
+                    }
                 }
+            } else if file_type.is_dir() {
+                let path = dir_entry.path();
+
+                // Recurse into the dir
+                pending_paths[thread_index].push(path);
             }
-        } else if file_type.is_dir() {
-            let path = dir_entry.path();
-
-            // Recurse into the dir
-            pending_paths[thread_index].push(path);
         }
+
+        // Remove ourselves from pending
+        pending.fetch_sub(1, Ordering::AcqRel);
     }
-
-    // Remove ourselves from pending
-    pending.fetch_sub(1, Ordering::AcqRel);
-
     Ok(())
 }
 
