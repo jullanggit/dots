@@ -2,9 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.6
+
+### Feature
+#### list
+
+- add ignore_paths config option
+
+### README
+
+- add explanations for config options
+
+### code
+#### clippy
+
+- allow some unwrap/expect's that dont make sense to handle
+
+### fix
+#### clippy
+
+- use OptionExt as _
+
+#### list
+
+- remove thread from pending, even on read_dir error
+
+### list
+
+- ignore some more errors (just continue with searching)
+
 ## 0.2.5
 
 ### Other
+
+- Release
 
 - use color-eyre for error handeling
 
