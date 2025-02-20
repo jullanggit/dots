@@ -1,4 +1,4 @@
-use color_eyre::eyre::{Context as _, Result};
+use anyhow::{Context as _, Result};
 
 use crate::{
     config::CONFIG,
@@ -108,7 +108,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
                         .or_else(|| try_steal_path(&pending_paths, my_index))
                     {
                         process_path(&pending_paths, &pending, my_index, &path)
-                            .wrap_err_with(|| format!("Failed to process path {}", path.display()))
+                            .with_context(|| format!("Failed to process path {}", path.display()))
                             .unwrap();
                         continue;
                     }
@@ -190,7 +190,7 @@ fn process_path(
             let entry_path = dir_entry.path();
 
             // Get the file type
-            let file_type = dir_entry.file_type().wrap_err_with(|| {
+            let file_type = dir_entry.file_type().with_context(|| {
                 format!("Failed to get file type of '{}'", entry_path.display())
             })?;
 

@@ -17,8 +17,8 @@ name = "dots"
 path = "src/main.rs"
 
 [dependencies]
+anyhow = "1.0.96"
 clap = { version = "4.5.11", features = ["derive"] }
-color-eyre = "0.6.3"
 
 [lints.clippy]
 # Groups

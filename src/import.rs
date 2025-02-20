@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use color_eyre::eyre::Result;
+use anyhow::{Result, ensure};
 
 use crate::{
     add::add,
@@ -16,10 +16,12 @@ pub fn import(cli_path: &Path, copy: bool) -> Result<()> {
     let config_path = config_path(cli_path)?;
     let system_path = system_path(cli_path)?;
 
-    assert!(
-        !(copy && system_path.is_dir()),
-        "Only files and symlinks are currently supported with --copy"
-    );
+    if copy {
+        ensure!(
+            !system_path.is_dir(),
+            "Only files and symlinks are currently supported with --copy"
+        );
+    }
 
     // Copy system path to config path
     let copy_result = if system_path.is_dir() {

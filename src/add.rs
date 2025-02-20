@@ -6,10 +6,7 @@ use std::{
     process::exit,
 };
 
-use color_eyre::{
-    Result,
-    eyre::{OptionExt as _, eyre},
-};
+use anyhow::{Context as _, Result, ensure};
 
 use crate::util::{
     config_path, paths_equal, rerun_with_root, rerun_with_root_if_permission_denied, system_path,
@@ -51,11 +48,10 @@ pub fn add_copy(path: &Path, force: bool) -> Result<()> {
     let config_path = config_path(path)?;
     let system_path = system_path(path)?;
 
-    if config_path.is_dir() {
-        return Err(eyre!(
-            "Only files and symlinks are currently supported with --copy"
-        ));
-    }
+    ensure!(
+        !config_path.is_dir(),
+        "Only files and symlinks are currently supported with --copy"
+    );
 
     // If path exists on the system
     if rerun_with_root_if_permission_denied(
@@ -114,7 +110,7 @@ fn create_symlink(config_path: &Path, system_path: &Path) -> Result<()> {
                     create_dir_all(
                         system_path
                             .parent()
-                            .ok_or_eyre("Failed to get parent of system path")?,
+                            .context("Failed to get parent of system path")?,
                     ),
                     "creating parent directories",
                 )?;

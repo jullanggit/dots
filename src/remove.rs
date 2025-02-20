@@ -1,6 +1,6 @@
 use std::{fs::remove_file, path::Path};
 
-use color_eyre::eyre::Result;
+use anyhow::Result;
 
 use crate::util::{rerun_with_root_if_permission_denied, system_path};
 

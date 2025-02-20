@@ -8,8 +8,8 @@ mod list;
 mod remove;
 mod util;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use color_eyre::eyre::Result;
 use std::{path::PathBuf, sync::OnceLock};
 
 #[derive(Parser, Debug)]
@@ -101,8 +101,6 @@ static SILENT: OnceLock<bool> = OnceLock::new();
 
 #[expect(clippy::expect_used)]
 fn main() -> Result<()> {
-    color_eyre::install()?;
-
     let args = Cli::parse();
 
     SILENT

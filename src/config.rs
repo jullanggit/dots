@@ -1,9 +1,6 @@
 use std::{fs, path::PathBuf, sync::LazyLock};
 
-use color_eyre::{
-    Section as _,
-    eyre::{Context as _, Result, eyre},
-};
+use anyhow::{Context as _, Result, bail, ensure};
 
 use crate::util::home;
 
@@ -28,8 +25,7 @@ impl Config {
         let path = format!("{}/.config/dots", home()?);
 
         let string = fs::read_to_string(path)
-            .wrap_err("Failed to read config")
-            .suggestion("Try creating {home}/.config/dots")?;
+            .context("Failed to read config. Maybe try creating {home}/.config/dots")?;
 
         let mut config = Self::default();
 
@@ -45,20 +41,19 @@ impl Config {
                         .ignore_paths
                         .extend(value.split(',').map(|value| value.trim().into())),
                     "root" => config.root = true,
-                    other => return Err(eyre!("Unknown config entry: {other}")),
+                    other => bail!("Unknown config entry: {other}"),
                 },
                 None => match line.trim() {
                     "root" => config.root = true,
-                    other => return Err(eyre!("Unknown config key: {other}")),
+                    other => bail!("Unknown config key: {other}"),
                 },
             }
         }
 
-        if config.default_subdir.is_empty() {
-            return Err(eyre!("default_subdir is empty or not in the config")).suggestion(
-                "Try adding something like `default_subdir = common` to your dots config file",
-            );
-        }
+        ensure!(
+            !config.default_subdir.is_empty(),
+            "default_subdir is empty or not in the config. Maybe try adding something like `default_subdir = common` to your dots config file"
+        );
 
         Ok(config)
     }

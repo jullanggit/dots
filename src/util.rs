@@ -6,18 +6,18 @@ use std::{
     process::{Command, exit},
 };
 
-use color_eyre::eyre::{Context as _, OptionExt as _, Result, eyre};
+use anyhow::{Context as _, Result, bail};
 
 use crate::{SILENT, config::CONFIG};
 
 /// The absolute path to the users home directory.
 pub fn home() -> Result<String> {
-    env::var("HOME").wrap_err("Failed to get HOME env variable")
+    env::var("HOME").context("Failed to get HOME env variable")
 }
 
 pub fn get_hostname() -> Result<String> {
     Ok(fs::read_to_string("/etc/hostname")
-        .wrap_err("Failed to read /etc/hostname")?
+        .context("Failed to read /etc/hostname")?
         .trim()
         .into())
 }
@@ -70,16 +70,18 @@ pub fn system_path(path: &Path) -> Result<PathBuf> {
     let str = path
         .as_os_str()
         .to_str()
-        .ok_or_eyre("Failed to convert path to string")?;
+        .context("Failed to convert path to string")?;
 
     // Replace {home} with the users home dir
     let resolved_home = str.replace("{home}", &home()?[1..]);
 
     Ok(if path.is_relative() {
-        // Only keep the path from the first /
-        let absolute = &resolved_home[str
+        let index = str
             .find('/')
-            .ok_or_else(|| eyre!("Failed finding '/' in path '{}'", path.display()))?..];
+            .with_context(|| format!("Failed finding '/' in path '{}'", path.display()))?;
+
+        // Only keep the path from the first /
+        let absolute = &resolved_home[index..];
 
         absolute.into()
     } else {
@@ -142,11 +144,11 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
     )?;
 
     if system_metadata.file_type() != config_metadata.file_type() {
-        Err(eyre!("Path already exists and differs in file type"))
+        bail!("Path already exists and differs in file type")
     } else if system_metadata.len() != config_metadata.len() {
-        Err(eyre!("Path already exists and differs in len"))
+        bail!("Path already exists and differs in len")
     } else if system_metadata.permissions() != config_metadata.permissions() {
-        Err(eyre!("Path already exists and differs in permissions"))
+        bail!("Path already exists and differs in permissions")
         // If they are symlinks
     } else if system_metadata.file_type().is_symlink()
     // And their destinations dont match
@@ -158,9 +160,7 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
             "reading symlink destination for system path",
         )?
     {
-        Err(eyre!(
-            "Path already exists and differs in symlink destination"
-        ))
+        bail!("Path already exists and differs in symlink destination")
     } else if system_metadata.file_type().is_file() {
         let system_file =
             rerun_with_root_if_permission_denied(File::open(system_path), "opening system file")?;
@@ -184,11 +184,11 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
             )?;
 
             if system_read != config_read {
-                return Err(eyre!("Path already exists and differs in content length"));
+                bail!("Path already exists and differs in content length");
             } else if system_read == 0 {
                 return Ok(()); // EOF & identical
             } else if system_buf[..system_read] != config_buf[..config_read] {
-                return Err(eyre!("Path already exists and differs in file contents"));
+                bail!("Path already exists and differs in file contents");
             }
         }
     } else {
