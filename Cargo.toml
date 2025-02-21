@@ -35,7 +35,6 @@ panic = "warn"
 # Restrict
 # absolute_paths = "warn"
 allow_attributes = "warn"
-arithmetic_side_effects = "warn"
 assertions_on_result_states = "warn"
 clone_on_ref_ptr = "warn"
 dbg_macro = "warn"
