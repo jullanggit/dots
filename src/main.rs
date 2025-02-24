@@ -75,6 +75,8 @@ enum Commands {
     /// Debugging commands
     #[command(subcommand)]
     Debug(DebugCommands),
+    /// Interactively creates the config file
+    Config,
 }
 
 #[derive(Subcommand, Debug)]
@@ -113,5 +115,6 @@ fn main() -> Result<()> {
         Commands::Import { path, copy } => import::import(&path, copy),
         Commands::List { rooted, copy } => list::list(rooted, copy),
         Commands::Debug(debug_command) => debug::debug(debug_command),
+        Commands::Config => config::Config::setup(),
     }
 }

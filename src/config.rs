@@ -1,8 +1,8 @@
-use std::{fs, path::PathBuf, sync::LazyLock};
+use std::{fs, io::stdin, path::PathBuf, sync::LazyLock};
 
 use anyhow::{Context as _, Result, bail, ensure};
 
-use crate::util::home;
+use crate::{add::bool_question, util::home};
 
 #[expect(clippy::unwrap_used)]
 pub static CONFIG: LazyLock<Config> = LazyLock::new(|| Config::load().unwrap());
@@ -21,11 +21,51 @@ pub struct Config {
     pub root: bool,
 }
 impl Config {
+    pub fn setup() -> Result<()> {
+        let stdin = stdin();
+
+        let mut file_string = String::new();
+
+        let mut prompt_field = |field: &str, prompt: &str| -> Result<()> {
+            file_string.push_str(field);
+            file_string.push_str(" = ");
+            println!("{prompt}:");
+            stdin.read_line(&mut file_string)?;
+            Ok(())
+        };
+
+        prompt_field(
+            "files_path",
+            "Please enter the path of the files that should be managed by dots",
+        )?;
+
+        prompt_field("default_subdir", "Please enter the default subdir")?;
+
+        prompt_field(
+            "list_paths",
+            "Please enter the paths that should be searched by `dots list`, separated by commas",
+        )?;
+
+        prompt_field(
+            "ignore_paths",
+            "Please enter the paths that should be ignored by `dots list`, separated by commas",
+        )?;
+
+        if bool_question("Should `dots list` be run with root privileges?")? {
+            file_string.push_str("root");
+        }
+
+        let path = format!("{}/.config/dots", home()?);
+
+        fs::write(path, file_string)?;
+
+        Ok(())
+    }
     fn load() -> Result<Self> {
         let path = format!("{}/.config/dots", home()?);
 
-        let string = fs::read_to_string(path)
-            .context("Failed to read config. Maybe try creating {home}/.config/dots")?;
+        let string = fs::read_to_string(&path)
+            .with_context(|| format!("\nFailed to read config at {path}. Run `dots config` to create it interactively or do so manually."))?;
 
         let mut config = Self::default();
 

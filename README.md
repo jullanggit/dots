@@ -26,6 +26,7 @@ All paths are in the format described above.
 - remove:  Remove the given path from the system (does not remove the files the path points to, only the symlink)
 - import:  Import the given path from the system
 - list:    Outputs a list of all symlinks on the system that are probably made by dots
+- config:  Interactively creates the config file
 
 All commands (except remove, which doesn't care) can also take --copy as an argument for copying, instead of symlinking the file. This is meant for things that for some reason or another do not like being a symlink.
 
@@ -66,5 +67,5 @@ Note that paths added using --copy will not be detected by list, instead a list 
 `cargo +nightly install atem-dots`
 
 ## Usage
-- This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me.
+- This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me and a few other users.
 - Please do report any errors/bugs if you encounter them

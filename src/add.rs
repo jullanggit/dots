@@ -82,7 +82,9 @@ fn ask_for_overwrite(force: bool, system_path: &Path) -> Result<()> {
         || bool_question(&format!(
             "The path {} already exists, overwrite?",
             system_path.display()
-        )) && bool_question("Are you sure?")
+        ))
+        .unwrap_or_default()
+            && bool_question("Are you sure?").unwrap_or_default()
     {
         let result = if system_path.is_dir() {
             fs::remove_dir_all(system_path)
@@ -126,26 +128,21 @@ fn create_symlink(config_path: &Path, system_path: &Path) -> Result<()> {
 }
 
 /// Asks the user the given question and returns the users answer.
-/// Returns false if getting the answer failed
-fn bool_question(question: &str) -> bool {
+pub fn bool_question(question: &str) -> Result<bool> {
     print!("{question} ");
 
-    if stdout().flush().is_err() {
-        return false;
-    }
+    stdout().flush()?;
 
     let mut buffer = String::with_capacity(3); // The longest accepted answer is 3 characters long
 
     loop {
         buffer.clear();
 
-        if stdin().read_line(&mut buffer).is_err() {
-            return false;
-        }
+        stdin().read_line(&mut buffer)?;
 
         match buffer.trim() {
-            "y" | "Y" | "yes" | "Yes" => return true,
-            "n" | "N" | "no" | "No" => return false,
+            "y" | "Y" | "yes" | "Yes" => return Ok(true),
+            "n" | "N" | "no" | "No" => return Ok(false),
             _other => {}
         }
     }
