@@ -1,4 +1,5 @@
 #![feature(let_chains)]
+#![feature(iter_collect_into)]
 
 mod add;
 mod config;

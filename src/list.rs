@@ -50,6 +50,14 @@ impl PendingPaths {
                 self.len.fetch_sub(1, Ordering::AcqRel);
             })
     }
+    /// Drain half of `self`  into `other`
+    /// This may block the current thread
+    #[expect(clippy::expect_used)] // We only panic if another thread already did
+    fn drain(&self, other: &mut Vec<PathBuf>) {
+        let mut lock = self.queue.lock().expect("No other threads should panic");
+        let len = lock.len();
+        lock.drain(len / 2..).collect_into(other);
+    }
     fn len(&self) -> usize {
         self.len.load(Ordering::Acquire)
     }
@@ -105,7 +113,7 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
                     if let Some(path) = pending_paths[my_index]
                         .pop()
                         // Or try stealing a path from another thread's queue
-                        .or_else(|| try_steal_path(&pending_paths, my_index))
+                        .or_else(|| try_steal_paths(&pending_paths, my_index))
                     {
                         process_path(&pending_paths, &pending, my_index, &path)
                             .with_context(|| format!("Failed to process path {}", path.display()))
@@ -129,7 +137,9 @@ pub fn list(rooted: bool, copy: Option<Vec<String>>) -> Result<()> {
 }
 
 /// Try to steal a pending path from another thread.
-fn try_steal_path(pending_paths: &[PendingPaths], my_index: usize) -> Option<PathBuf> {
+/// Appends the stolen paths to the threads pending_paths.
+/// Returns the first stolen path
+fn try_steal_paths(pending_paths: &[PendingPaths], my_index: usize) -> Option<PathBuf> {
     let mut candidate: Option<(usize, usize)> = None; // (thread_index, waiting)
 
     // For all other threads
@@ -163,11 +173,21 @@ fn try_steal_path(pending_paths: &[PendingPaths], my_index: usize) -> Option<Pat
 
     if let Some((other_index, _)) = candidate {
         let other_pending_paths = &pending_paths[other_index];
+        let self_pending_paths = &pending_paths[my_index];
+
+        self_pending_paths.start_waiting();
+        let mut self_lock = self_pending_paths
+            .queue
+            .lock()
+            .expect("No other thread should panick");
 
         // start waiting -> pop -> stop waiting
         other_pending_paths.start_waiting();
-        let stolen = other_pending_paths.pop();
+        other_pending_paths.drain(&mut self_lock);
         other_pending_paths.stop_waiting();
+
+        let stolen = self_lock.pop();
+        self_pending_paths.stop_waiting();
 
         stolen
     } else {
