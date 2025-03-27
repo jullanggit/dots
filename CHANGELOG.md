@@ -2,12 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.0
+
+### Feature
+#### config
+
+- Add command for interactively creating the config file
+
+### Other
+
+- color-eyre -> anyhow
+
 ## 0.2.6
 
 ### Feature
 #### list
 
 - add ignore_paths config option
+
+### Other
+
+- Release
 
 ### README
 
