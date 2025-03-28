@@ -4,11 +4,11 @@ use std::{
     path::Path,
 };
 
-use anyhow::{Result, ensure};
+use anyhow::{Context as _, Result, ensure};
 
 use crate::{
     add::add,
-    util::{config_path, rerun_with_root_if_permission_denied, system_path},
+    util::{config_path, system_path},
 };
 
 /// Imports the given config path from the system path
@@ -24,20 +24,18 @@ pub fn import(cli_path: &Path, copy: bool) -> Result<()> {
     }
 
     // Copy system path to config path
-    let copy_result = if system_path.is_dir() {
+    if system_path.is_dir() {
         copy_dir(&system_path, &config_path)
     } else {
         fs::copy(&system_path, &config_path).map(|_| ())
-    };
-
-    rerun_with_root_if_permission_denied(
-        copy_result,
-        &format!(
+    }
+    .with_context(|| {
+        format!(
             "copying system path ({}) to config path ({})",
             system_path.display(),
             config_path.display()
-        ),
-    )?;
+        )
+    })?;
 
     add(cli_path, true, copy)
 }

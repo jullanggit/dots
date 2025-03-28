@@ -8,9 +8,7 @@ use std::{
 
 use anyhow::{Context as _, Result, ensure};
 
-use crate::util::{
-    config_path, paths_equal, rerun_with_root, rerun_with_root_if_permission_denied, system_path,
-};
+use crate::util::{config_path, paths_equal, rerun_with_root, system_path};
 
 /// Symlink a the given path to its location in the actual system
 pub fn add(path: &Path, force: bool, copy: bool) -> Result<()> {
@@ -54,9 +52,8 @@ pub fn add_copy(path: &Path, force: bool) -> Result<()> {
     );
 
     // If path exists on the system
-    if rerun_with_root_if_permission_denied(
-        fs::exists(path),
-        &format!("checking if the path {} already exists", path.display()),
+    if fs::exists(path).with_context(
+        || format!("checking if the path {} already exists", path.display()),
         // And is not equal to the one in the config
     )? && let Err(e) = paths_equal(&config_path, &system_path)
     {
@@ -70,8 +67,9 @@ pub fn add_copy(path: &Path, force: bool) -> Result<()> {
         config_path.display(),
         system_path.display(),
     );
-    rerun_with_root_if_permission_denied(
-        fs::copy(config_path, system_path).map(|_| {}), // Ignore number of bytes copied
+
+    fs::copy(config_path, system_path).map(|_| {}).context(
+        // Ignore number of bytes copied
         "copying config path to system path",
     )
 }
@@ -86,13 +84,12 @@ fn ask_for_overwrite(force: bool, system_path: &Path) -> Result<()> {
         .unwrap_or_default()
             && bool_question("Are you sure?").unwrap_or_default()
     {
-        let result = if system_path.is_dir() {
+        if system_path.is_dir() {
             fs::remove_dir_all(system_path)
         } else {
             fs::remove_file(system_path)
-        };
-
-        rerun_with_root_if_permission_denied(result, "removing path")
+        }
+        .with_context(|| format!("removing path {}", system_path.display()))
     } else {
         exit(1)
     }
@@ -108,14 +105,12 @@ fn create_symlink(config_path: &Path, system_path: &Path) -> Result<()> {
                 rerun_with_root("Creating symlink");
             }
             ErrorKind::NotFound => {
-                rerun_with_root_if_permission_denied(
-                    create_dir_all(
-                        system_path
-                            .parent()
-                            .context("Failed to get parent of system path")?,
-                    ),
-                    "creating parent directories",
-                )?;
+                create_dir_all(
+                    system_path
+                        .parent()
+                        .context("Failed to get parent of system path")?,
+                )
+                .context("creating parent directories")?;
 
                 create_symlink(config_path, system_path)?;
             }

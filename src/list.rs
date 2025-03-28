@@ -2,10 +2,7 @@ use anyhow::{Context as _, Result};
 
 use crate::{
     config::CONFIG,
-    util::{
-        config_path, get_hostname, home, paths_equal, rerun_with_root_args,
-        rerun_with_root_if_permission_denied, system_path,
-    },
+    util::{config_path, get_hostname, home, paths_equal, rerun_with_root_args, system_path},
 };
 use std::{
     fs::{self},
@@ -247,9 +244,8 @@ fn list_copy(items: Vec<String>) -> Result<()> {
         let system_path = system_path(path)?;
 
         // If path exists on the system
-        if rerun_with_root_if_permission_denied(
-            fs::exists(path),
-            &format!("checking if the path {} already exists", path.display()),
+        if fs::exists(path).with_context(
+            || format!("checking if the path {} already exists", path.display()),
             // And is equal to the one in the config
         )? && paths_equal(&config_path, &system_path).is_ok()
         {

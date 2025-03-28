@@ -1,13 +1,13 @@
 use std::{fs::remove_file, path::Path};
 
-use anyhow::Result;
+use anyhow::{Context as _, Result};
 
-use crate::util::{rerun_with_root_if_permission_denied, system_path};
+use crate::util::system_path;
 
 pub fn remove(path: &Path) -> Result<()> {
     let path = system_path(path)?;
 
-    rerun_with_root_if_permission_denied(remove_file(path), "deleting symlink")?;
+    remove_file(path).context("deleting symlink")?;
 
     Ok(())
 }

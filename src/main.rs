@@ -10,7 +10,12 @@ mod util;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use std::{path::PathBuf, sync::OnceLock};
+use std::{
+    io::{self, ErrorKind},
+    path::PathBuf,
+    sync::OnceLock,
+};
+use util::rerun_with_root;
 
 #[derive(Parser, Debug)]
 #[command(name = "dots")]
@@ -117,4 +122,11 @@ fn main() -> Result<()> {
         Commands::Debug(debug_command) => debug::debug(debug_command),
         Commands::Config => config::Config::setup(),
     }
+    .inspect_err(|error| {
+        if let Some(io_error) = error.root_cause().downcast_ref::<io::Error>() {
+            if io_error.kind() == ErrorKind::PermissionDenied {
+                rerun_with_root(&format!("{error}")); // just formatting the error should be fine for handling context
+            }
+        }
+    })
 }
