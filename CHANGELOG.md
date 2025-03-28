@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1
+
+### code
+
+- handle rerunning with privileges at the top level of the app, instead on every possible permission denied
+
+### feature
+
+- report type of difference when asking for overwrite
+
 ## 0.3.0
 
 ### Feature
@@ -10,6 +20,8 @@ All notable changes to this project will be documented in this file.
 - Add command for interactively creating the config file
 
 ### Other
+
+- Release
 
 - color-eyre -> anyhow
 
