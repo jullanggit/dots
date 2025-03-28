@@ -19,7 +19,7 @@ pub fn add(path: &Path, force: bool, copy: bool) -> Result<()> {
     let config_path = config_path(path)?;
     let system_path = system_path(path)?;
 
-    // If the path already exists
+    // If the system path already exists
     if symlink_metadata(&system_path).is_ok() {
         // Check if it is a symlink that points to the correct location
         if let Ok(destination) = fs::read_link(&system_path)
@@ -29,7 +29,7 @@ pub fn add(path: &Path, force: bool, copy: bool) -> Result<()> {
         }
 
         // -> It isnt
-        ask_for_overwrite(force, &system_path)?;
+        ask_for_overwrite(force, &config_path, &system_path)?;
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -58,7 +58,7 @@ pub fn add_copy(path: &Path, force: bool) -> Result<()> {
     )? && let Err(e) = paths_equal(&config_path, &system_path)
     {
         eprintln!("{e}");
-        ask_for_overwrite(force, &system_path)?;
+        ask_for_overwrite(force, &config_path, &system_path)?;
     }
 
     // At this point the path either doesn't exist yet, or the user has decided to overwrite it
@@ -75,14 +75,15 @@ pub fn add_copy(path: &Path, force: bool) -> Result<()> {
 }
 
 /// Asks for overwrite and removes the path from the system if requested, exits if not
-fn ask_for_overwrite(force: bool, system_path: &Path) -> Result<()> {
+fn ask_for_overwrite(force: bool, config_path: &Path, system_path: &Path) -> Result<()> {
     if force
-        || bool_question(&format!(
-            "The path {} already exists, overwrite?",
-            system_path.display()
-        ))
-        .unwrap_or_default()
-            && bool_question("Are you sure?").unwrap_or_default()
+        || match paths_equal(config_path, system_path) {
+            Ok(()) => true,
+            Err(e) => {
+                bool_question(&format!("{e}, overwrite system path?")).unwrap_or_default()
+                    && bool_question("Are you sure?").unwrap_or_default()
+            }
+        }
     {
         if system_path.is_dir() {
             fs::remove_dir_all(system_path)

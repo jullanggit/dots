@@ -6,7 +6,7 @@ use std::{
     process::{Command, exit},
 };
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::{Context as _, Result, anyhow};
 
 use crate::{SILENT, config::CONFIG};
 
@@ -133,30 +133,41 @@ pub fn config_path(mut cli_path: &Path) -> Result<PathBuf> {
 /// Does *not* currently support directories
 #[expect(clippy::filetype_is_file)]
 pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
+    let fmt_diff = |difference: &str| {
+        Err(anyhow!(
+            "Path {} already exists and differs in {difference} to {}",
+            system_path.display(),
+            config_path.display()
+        ))
+    };
+
     // Get metadatas
-    let system_metadata =
-        fs::symlink_metadata(system_path).context("getting metadata for system path")?;
-    let config_metadata =
-        fs::symlink_metadata(config_path).context("getting metadata for config path")?;
+    let system_metadata = fs::symlink_metadata(system_path).with_context(|| {
+        format!(
+            "Failed to get metadata for system path {}",
+            system_path.display()
+        )
+    })?;
+    let config_metadata = fs::symlink_metadata(config_path).with_context(|| {
+        format!(
+            "Failed to get metadata for config path {}",
+            config_path.display()
+        )
+    })?;
 
     if system_metadata.file_type() != config_metadata.file_type() {
-        bail!("Path already exists and differs in file type")
+        fmt_diff("file type")
     } else if system_metadata.len() != config_metadata.len() {
-        bail!("Path already exists and differs in len")
+        fmt_diff("length")
     } else if system_metadata.permissions() != config_metadata.permissions() {
-        bail!("Path already exists and differs in permissions")
+        fmt_diff("permissions")
         // If they are symlinks
     } else if system_metadata.file_type().is_symlink()
     // And their destinations dont match
-        &&
-            fs::read_link(system_path).context(
-            "reading symlink destination for system path",
-        )? !=
-            fs::read_link(system_path).context(
-            "reading symlink destination for system path",
-        )?
+        && fs::read_link(system_path).with_context(|| format!("reading symlink destination for path {}", system_path.display()))?
+        != fs::read_link(config_path).with_context(|| format!("reading symlink destination for path {}", config_path.display()))?
     {
-        bail!("Path already exists and differs in symlink destination")
+        fmt_diff("symlink destination")
     } else if system_metadata.file_type().is_file() {
         let system_file = File::open(system_path).context("opening system file")?;
         let config_file = File::open(config_path).context("opening config file")?;
@@ -177,11 +188,11 @@ pub fn paths_equal(config_path: &Path, system_path: &Path) -> Result<()> {
                 .context("reading config file")?;
 
             if system_read != config_read {
-                bail!("Path already exists and differs in content length");
+                fmt_diff("content length")?;
             } else if system_read == 0 {
                 return Ok(()); // EOF & identical
             } else if system_buf[..system_read] != config_buf[..config_read] {
-                bail!("Path already exists and differs in file contents");
+                fmt_diff("file contents")?;
             }
         }
     } else {
