@@ -69,3 +69,4 @@ Note that paths added using --copy will not be detected by list, instead a list 
 ## Usage
 - This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me and a few other users.
 - Please do report any errors/bugs if you encounter them
+![brainmademark](https://brainmade.org/black-logo.svg)
