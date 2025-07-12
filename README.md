@@ -17,7 +17,7 @@ Then, you can just omit the default subdir. (For example: `/etc/pacman.conf`)
 "{home}" can be used as a placeholder for the home directory of the current user (For example: `/{home}/.config/dots`).
 
 ## Ideas, contributing, bugs etc
-- Dots is still very much under active development, so if you have any ideas / feature requests or encounter any bugs, please open an issue or a PR
+- Dots is still very much under development, so if you have any ideas / feature requests or encounter any bugs, please open an issue or a PR
 
 ## Commands
 All paths are in the format described above.
@@ -25,6 +25,8 @@ All paths are in the format described above.
 - add:     Add the given path to the system
 - remove:  Remove the given path from the system (does not remove the files the path points to, only the symlink)
 - import:  Import the given path from the system
+> [!WARNING]
+Import has sometimes eaten data and I haven't yet had the time to track it down, so make sure to have a backup, or import manually (or of course fix the bug :D)
 - list:    Outputs a list of all symlinks on the system that are probably made by dots
 - config:  Interactively creates the config file
 
@@ -69,4 +71,5 @@ Note that paths added using --copy will not be detected by list, instead a list 
 ## Usage
 - This software is provided as-is: I make no guarantees that using dots wont fuck up your system, the only testing it currently receives is usage by me and a few other users.
 - Please do report any errors/bugs if you encounter them
+ 
 ![brainmademark](https://brainmade.org/black-logo.svg)
